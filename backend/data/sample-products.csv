@@ -1,0 +1,6 @@
+sku,name,category,views,add_to_cart,purchases,returns,description,reviews,return_reasons,photo_count,has_size_chart,has_model_photo
+SNK-101,Beyaz Platform Sneaker,Ayakkabi,4200,510,118,34,"Rahat ve şık günlük sneaker.","Ürün güzel ama kalıbı çok dar. Fotoğrafta daha yumuşak duruyor. Bir numara küçük geldi.","Numara küçük geldi; kalıbı dar; ayakta beklediğim gibi durmadı",4,true,false
+DRS-220,Siyah Kruvaze Elbise,Giyim,3100,430,86,29,"Kruvaze kesim siyah elbise. Günlük ve davet kullanımı için uygundur.","Kumaşı ince. Bedeni büyük geldi. Boyu modeldeki gibi durmadı.","Bedeni büyük geldi; kumaşı beklediğimden ince; boyu kısa",3,false,true
+HDP-044,Bluetooth Kulaklık,Elektronik,2800,260,74,8,"Bluetooth kulaklık, uzun pil ömrü.","Ses iyi ama bağlantı bazen kopuyor. Kutu içeriği açıklamada yoktu.","Bağlantı sorunu; açıklama eksik",5,false,false
+BAG-018,Mini Deri Çanta,Aksesuar,1900,250,112,6,"Şık mini çanta.","Rengi fotoğraftan koyu. Boyutu küçük ama kullanışlı.","Rengi farklı; boyut beklediğimden küçük",6,false,true
+COS-330,Nemlendirici Krem,Kozmetik,3600,390,141,17,"Tüm cilt tipleri için nemlendirici krem.","Kokusu yoğun. Hassas cildimde kızarıklık yaptı. İçerik bilgisi eksik.","Koku yoğun; ciltte kızarıklık; içerik bilgisi eksik",2,false,false
