@@ -24,6 +24,22 @@ pip install -r requirements.txt
 uvicorn productfix.api:app --reload
 ```
 
+The API persists uploaded CSV data per SaaS customer. Each `tenant_id` gets its
+own SQLite database under `backend/data/tenants/`, so customers do not have to
+upload the same CSV again.
+
+Useful endpoints:
+
+- `POST /tenants/{tenant_id}/products/import-csv`: import or update products
+  from a CSV file, then return the tenant analysis.
+- `GET /tenants/{tenant_id}/products`: list the products already stored for
+  that tenant.
+- `GET /tenants/{tenant_id}/analysis`: analyze the tenant's stored products
+  without uploading another CSV.
+- `POST /tenants/{tenant_id}/fixes/{fix_id}/complete`: mark a fix as completed
+  or reopen it with `{ "completed": false }`.
+- `GET /tenants/{tenant_id}/fixes/completed`: list completed fixes.
+
 ## Frontend
 
 Flutter is expected to be available in your environment.

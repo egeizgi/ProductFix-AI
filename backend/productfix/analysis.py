@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -172,6 +173,7 @@ def _fix_actions(products: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for issue in product["issues"]:
             actions.append(
                 {
+                    "id": fix_action_id(product["sku"], issue["fix"]),
                     "sku": product["sku"],
                     "product": product["name"],
                     "score": product["score"],
@@ -183,6 +185,7 @@ def _fix_actions(products: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for missing in product["missing_info"]:
             actions.append(
                 {
+                    "id": fix_action_id(product["sku"], missing),
                     "sku": product["sku"],
                     "product": product["name"],
                     "score": product["score"],
@@ -193,6 +196,11 @@ def _fix_actions(products: list[dict[str, Any]]) -> list[dict[str, Any]]:
             )
 
     return sorted(actions, key=lambda action: (action["risk"] != "high", action["score"]))[:12]
+
+
+def fix_action_id(sku: str, title: str) -> str:
+    digest = hashlib.sha1(f"{sku}:{title}".encode("utf-8")).hexdigest()[:12]
+    return f"{sku}:{digest}"
 
 
 def _number(value: Any) -> int:

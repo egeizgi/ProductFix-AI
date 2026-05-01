@@ -1,4 +1,17 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:html' as html;
+
 import 'package:flutter/material.dart';
+
+const apiBaseUrl = 'http://127.0.0.1:8000';
+
+String get appTenantId {
+  final tenant = Uri.base.queryParameters['tenant']?.trim();
+  return tenant == null || tenant.isEmpty ? 'acme-store' : tenant;
+}
+
+String get completedFixStorageKey => 'productfix.completedFixes.$appTenantId';
 
 void main() {
   runApp(const ProductFixApp());
@@ -36,10 +49,18 @@ class _ProductFixShellState extends State<ProductFixShell> {
   AppSection selectedSection = AppSection.dashboard;
   String? highlightedSku;
   final List<RawProduct> rawProducts = [...sampleProducts];
+  final Set<String> completedFixIds = {};
+  final Set<String> completedFixKeys = {};
 
   List<ProductInsight> get products {
     return rawProducts.map(analyzeProduct).toList()
       ..sort((a, b) => a.score.compareTo(b.score));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCompletedFixes();
   }
 
   @override
@@ -48,6 +69,8 @@ class _ProductFixShellState extends State<ProductFixShell> {
     final summary = Summary.fromProducts(insights);
     final themes = themeCounts(insights);
     final actions = buildFixActions(insights);
+    final openActions =
+        actions.where((action) => !_isFixCompleted(action)).toList();
 
     return Scaffold(
       body: SafeArea(
@@ -71,7 +94,9 @@ class _ProductFixShellState extends State<ProductFixShell> {
                   products: insights,
                   summary: summary,
                   themes: themes,
-                  actions: actions,
+                  actions: openActions,
+                  completedFixIds: completedFixIds,
+                  completedFixKeys: completedFixKeys,
                   highlightedSku: highlightedSku,
                   onAddManual: _openManualProductDialog,
                   onPasteCsv: _openCsvDialog,
@@ -81,6 +106,7 @@ class _ProductFixShellState extends State<ProductFixShell> {
                       highlightedSku = action.sku;
                     });
                   },
+                  onToggleFix: _toggleFix,
                 ),
               ),
             ),
@@ -129,6 +155,105 @@ class _ProductFixShellState extends State<ProductFixShell> {
       highlightedSku = rows.first.sku;
     });
   }
+
+  void _toggleFix(FixAction action) {
+    final wasCompleted = _isFixCompleted(action);
+    setState(() {
+      if (wasCompleted) {
+        completedFixIds.remove(action.id);
+        completedFixKeys.remove(action.matchKey);
+      } else {
+        completedFixIds.add(action.id);
+        completedFixKeys.add(action.matchKey);
+      }
+    });
+
+    _saveCompletedFixes();
+    unawaited(_syncFixCompletion(action, completed: !wasCompleted));
+  }
+
+  bool _isFixCompleted(FixAction action) {
+    return completedFixIds.contains(action.id) ||
+        completedFixKeys.contains(action.matchKey);
+  }
+
+  Future<void> _loadCompletedFixes() async {
+    _loadCompletedFixesFromBrowser();
+    await _loadCompletedFixesFromApi();
+  }
+
+  void _loadCompletedFixesFromBrowser() {
+    final raw = html.window.localStorage[completedFixStorageKey];
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      setState(() {
+        if (decoded is Map<String, dynamic>) {
+          completedFixIds
+              .addAll((decoded['ids'] as List? ?? []).cast<String>());
+          completedFixKeys
+              .addAll((decoded['keys'] as List? ?? []).cast<String>());
+        } else if (decoded is List) {
+          for (final item in decoded) {
+            final fix = CompletedFix.fromJson(item as Map<String, dynamic>);
+            completedFixIds.add(fix.id);
+            if (fix.matchKey.isNotEmpty) completedFixKeys.add(fix.matchKey);
+          }
+        }
+      });
+    } catch (_) {
+      html.window.localStorage.remove(completedFixStorageKey);
+    }
+  }
+
+  Future<void> _loadCompletedFixesFromApi() async {
+    try {
+      final fixes = await ProductFixApi.fetchCompletedFixes();
+      if (!mounted) return;
+      setState(() {
+        for (final fix in fixes) {
+          completedFixIds.add(fix.id);
+          completedFixKeys.add(fix.matchKey);
+        }
+      });
+      _saveCompletedFixes();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Backend tamamlanan fix listesi okunamadı; tarayıcı kaydı kullanılıyor.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _syncFixCompletion(
+    FixAction action, {
+    required bool completed,
+  }) async {
+    try {
+      await ProductFixApi.setFixCompleted(action, completed: completed);
+      await _loadCompletedFixesFromApi();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Fix yerelde kaydedildi, backend bağlantısı kurulunca tekrar senkronlanmalı.'),
+        ),
+      );
+    }
+  }
+
+  void _saveCompletedFixes() {
+    final payload = {
+      'ids': completedFixIds.toList()..sort(),
+      'keys': completedFixKeys.toList()..sort(),
+    };
+    html.window.localStorage[completedFixStorageKey] = jsonEncode(payload);
+  }
 }
 
 class _SectionBody extends StatelessWidget {
@@ -139,10 +264,13 @@ class _SectionBody extends StatelessWidget {
     required this.summary,
     required this.themes,
     required this.actions,
+    required this.completedFixIds,
+    required this.completedFixKeys,
     required this.highlightedSku,
     required this.onAddManual,
     required this.onPasteCsv,
     required this.onActionTap,
+    required this.onToggleFix,
   });
 
   final AppSection selectedSection;
@@ -150,10 +278,13 @@ class _SectionBody extends StatelessWidget {
   final Summary summary;
   final List<ThemeCount> themes;
   final List<FixAction> actions;
+  final Set<String> completedFixIds;
+  final Set<String> completedFixKeys;
   final String? highlightedSku;
   final VoidCallback onAddManual;
   final VoidCallback onPasteCsv;
   final ValueChanged<FixAction> onActionTap;
+  final ValueChanged<FixAction> onToggleFix;
 
   @override
   Widget build(BuildContext context) {
@@ -168,12 +299,18 @@ class _SectionBody extends StatelessWidget {
       AppSection.products => ProductsView(
           products: products,
           highlightedSku: highlightedSku,
+          completedFixIds: completedFixIds,
+          completedFixKeys: completedFixKeys,
+          onToggleFix: onToggleFix,
           onAddManual: onAddManual,
           onPasteCsv: onPasteCsv,
         ),
       AppSection.returns => ReturnsView(products: products, themes: themes),
-      AppSection.fixCenter =>
-        FixCenterView(actions: actions, onActionTap: onActionTap),
+      AppSection.fixCenter => FixCenterView(
+          actions: actions,
+          onActionTap: onActionTap,
+          onToggleFix: onToggleFix,
+        ),
     };
 
     return child;
@@ -281,12 +418,18 @@ class ProductsView extends StatelessWidget {
     super.key,
     required this.products,
     required this.highlightedSku,
+    required this.completedFixIds,
+    required this.completedFixKeys,
+    required this.onToggleFix,
     required this.onAddManual,
     required this.onPasteCsv,
   });
 
   final List<ProductInsight> products;
   final String? highlightedSku;
+  final Set<String> completedFixIds;
+  final Set<String> completedFixKeys;
+  final ValueChanged<FixAction> onToggleFix;
   final VoidCallback onAddManual;
   final VoidCallback onPasteCsv;
 
@@ -313,6 +456,9 @@ class ProductsView extends StatelessWidget {
           _ProductCard(
             product: product,
             highlighted: product.sku == highlightedSku,
+            completedFixIds: completedFixIds,
+            completedFixKeys: completedFixKeys,
+            onToggleFix: onToggleFix,
           ),
       ],
     );
@@ -422,11 +568,16 @@ class ReturnsView extends StatelessWidget {
 }
 
 class FixCenterView extends StatelessWidget {
-  const FixCenterView(
-      {super.key, required this.actions, required this.onActionTap});
+  const FixCenterView({
+    super.key,
+    required this.actions,
+    required this.onActionTap,
+    required this.onToggleFix,
+  });
 
   final List<FixAction> actions;
   final ValueChanged<FixAction> onActionTap;
+  final ValueChanged<FixAction> onToggleFix;
 
   @override
   Widget build(BuildContext context) {
@@ -439,15 +590,23 @@ class FixCenterView extends StatelessWidget {
           eyebrow: 'Reasonable öncelik',
           title: 'Bugün yapılacak işler',
           trailing: _Pill('${actions.length} aksiyon', color: AppColors.blue),
-          child: Column(
-            children: [
-              for (final action in actions)
-                _FixActionCard(
-                  action: action,
-                  onTap: () => onActionTap(action),
+          child: actions.isEmpty
+              ? const _EmptyState(
+                  icon: Icons.verified_outlined,
+                  title: 'Bugün yapılacak iş kalmadı',
+                  message:
+                      'Tamamlanan fixler ürün kartlarında yeşil olarak görünür.',
+                )
+              : Column(
+                  children: [
+                    for (final action in actions)
+                      _FixActionCard(
+                        action: action,
+                        onTap: () => onActionTap(action),
+                        onToggle: () => onToggleFix(action),
+                      ),
+                  ],
                 ),
-            ],
-          ),
         ),
       ],
     );
@@ -655,10 +814,19 @@ class _MetricGrid extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.product, required this.highlighted});
+  const _ProductCard({
+    required this.product,
+    required this.highlighted,
+    required this.completedFixIds,
+    required this.completedFixKeys,
+    required this.onToggleFix,
+  });
 
   final ProductInsight product;
   final bool highlighted;
+  final Set<String> completedFixIds;
+  final Set<String> completedFixKeys;
+  final ValueChanged<FixAction> onToggleFix;
 
   @override
   Widget build(BuildContext context) {
@@ -743,7 +911,12 @@ class _ProductCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-                _ImprovementBox(product: product),
+                _ImprovementBox(
+                  product: product,
+                  completedFixIds: completedFixIds,
+                  completedFixKeys: completedFixKeys,
+                  onToggleFix: onToggleFix,
+                ),
                 const SizedBox(height: 12),
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
@@ -773,13 +946,21 @@ class _ProductCard extends StatelessWidget {
 }
 
 class _ImprovementBox extends StatelessWidget {
-  const _ImprovementBox({required this.product});
+  const _ImprovementBox({
+    required this.product,
+    required this.completedFixIds,
+    required this.completedFixKeys,
+    required this.onToggleFix,
+  });
 
   final ProductInsight product;
+  final Set<String> completedFixIds;
+  final Set<String> completedFixKeys;
+  final ValueChanged<FixAction> onToggleFix;
 
   @override
   Widget build(BuildContext context) {
-    final items = product.priorityImprovements.take(4).toList();
+    final items = product.fixActions.take(4).toList();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -800,19 +981,75 @@ class _ImprovementBox extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          for (final item in items)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('• ',
-                      style: TextStyle(fontWeight: FontWeight.w900)),
-                  Expanded(
-                      child: Text(item, style: const TextStyle(height: 1.35))),
-                ],
+          for (final action in items)
+            _InlineFixItem(
+              action: action,
+              completed: completedFixIds.contains(action.id) ||
+                  completedFixKeys.contains(action.matchKey),
+              onToggle: () => onToggleFix(action),
+            ),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 2),
+              child: Text(
+                'Bu üründe açık fix kalmadı.',
+                style: TextStyle(
+                    color: AppColors.green, fontWeight: FontWeight.w800),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineFixItem extends StatelessWidget {
+  const _InlineFixItem({
+    required this.action,
+    required this.completed,
+    required this.onToggle,
+  });
+
+  final FixAction action;
+  final bool completed;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color:
+            completed ? AppColors.green.withValues(alpha: 0.1) : Colors.white,
+        border: Border.all(
+            color: completed ? AppColors.green : const Color(0xFFFFD28C)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            completed ? Icons.check_circle : Icons.radio_button_unchecked,
+            color: completed ? AppColors.green : AppColors.amber,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              action.title,
+              style: TextStyle(
+                height: 1.35,
+                decoration: completed ? TextDecoration.lineThrough : null,
+                color: completed ? AppColors.muted : null,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onToggle,
+            child: Text(completed ? 'Geri al' : 'Tamamlandı'),
+          ),
         ],
       ),
     );
@@ -862,10 +1099,15 @@ class _AiSuggestion extends StatelessWidget {
 }
 
 class _FixActionCard extends StatelessWidget {
-  const _FixActionCard({required this.action, required this.onTap});
+  const _FixActionCard({
+    required this.action,
+    required this.onTap,
+    required this.onToggle,
+  });
 
   final FixAction action;
   final VoidCallback onTap;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -902,6 +1144,12 @@ class _FixActionCard extends StatelessWidget {
                         style: TextStyle(
                             color: riskColor(action.risk),
                             fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: onToggle,
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('Tamamlandı'),
+                    ),
                   ],
                 ),
               ),
@@ -918,6 +1166,44 @@ class _FixActionCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.green.withValues(alpha: 0.08),
+        border: Border.all(color: AppColors.green.withValues(alpha: 0.25)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 34, color: AppColors.green),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.muted),
+          ),
+        ],
       ),
     );
   }
@@ -1612,6 +1898,69 @@ class RawProduct {
   final bool hasModelPhoto;
 }
 
+class CompletedFix {
+  const CompletedFix({
+    required this.id,
+    required this.sku,
+    required this.title,
+    required this.matchKey,
+  });
+
+  factory CompletedFix.fromJson(Map<String, dynamic> json) {
+    final sku = '${json['sku'] ?? ''}';
+    final title = '${json['title'] ?? ''}';
+    return CompletedFix(
+      id: '${json['fix_id'] ?? json['id'] ?? ''}',
+      sku: sku,
+      title: title,
+      matchKey: '${json['match_key'] ?? fixMatchKey(sku, title)}',
+    );
+  }
+
+  final String id;
+  final String sku;
+  final String title;
+  final String matchKey;
+}
+
+class ProductFixApi {
+  const ProductFixApi._();
+
+  static Future<List<CompletedFix>> fetchCompletedFixes() async {
+    final response = await html.HttpRequest.request(
+      '$apiBaseUrl/tenants/$appTenantId/fixes/completed',
+      method: 'GET',
+      requestHeaders: {'Accept': 'application/json'},
+    );
+    final decoded =
+        jsonDecode(response.responseText ?? '{}') as Map<String, dynamic>;
+    final fixes = (decoded['completed_fixes'] as List? ?? []).cast<dynamic>();
+    return fixes
+        .map((item) => CompletedFix.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<void> setFixCompleted(
+    FixAction action, {
+    required bool completed,
+  }) async {
+    await html.HttpRequest.request(
+      '$apiBaseUrl/tenants/$appTenantId/fixes/${Uri.encodeComponent(action.id)}/complete',
+      method: 'POST',
+      requestHeaders: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      sendData: jsonEncode({
+        'sku': action.sku,
+        'title': action.title,
+        'detail': action.detail,
+        'completed': completed,
+      }),
+    );
+  }
+}
+
 class IssueRule {
   const IssueRule({
     required this.key,
@@ -1649,6 +1998,7 @@ class ProductInsight {
     required this.buyerWarning,
     required this.aiAssistantNote,
     required this.priorityImprovements,
+    required this.fixActions,
   });
 
   final RawProduct raw;
@@ -1663,6 +2013,7 @@ class ProductInsight {
   final String buyerWarning;
   final String aiAssistantNote;
   final List<String> priorityImprovements;
+  final List<FixAction> fixActions;
 
   String get sku => raw.sku;
   String get name => raw.name;
@@ -1710,6 +2061,7 @@ class ThemeCount {
 
 class FixAction {
   const FixAction({
+    required this.id,
     required this.sku,
     required this.title,
     required this.detail,
@@ -1717,11 +2069,14 @@ class FixAction {
     required this.risk,
   });
 
+  final String id;
   final String sku;
   final String title;
   final String detail;
   final int score;
   final RiskLevel risk;
+
+  String get matchKey => fixMatchKey(sku, title);
 }
 
 ProductInsight analyzeProduct(RawProduct product) {
@@ -1763,6 +2118,13 @@ ProductInsight analyzeProduct(RawProduct product) {
           ? RiskLevel.medium
           : RiskLevel.low;
   final improvements = priorityImprovements(product, issues, missing);
+  final actions = fixActionsForProduct(
+    product: product,
+    improvements: improvements,
+    score: score,
+    risk: risk,
+    returnRate: returnRate,
+  );
 
   return ProductInsight(
     raw: product,
@@ -1777,6 +2139,7 @@ ProductInsight analyzeProduct(RawProduct product) {
     buyerWarning: buyerWarning(product, issues),
     aiAssistantNote: aiAssistantNote(product, issues, missing),
     priorityImprovements: improvements,
+    fixActions: actions,
   );
 }
 
@@ -1877,18 +2240,7 @@ List<ThemeCount> themeCounts(List<ProductInsight> products) {
 List<FixAction> buildFixActions(List<ProductInsight> products) {
   final actions = <FixAction>[];
   for (final product in products) {
-    for (final item in product.priorityImprovements.take(3)) {
-      actions.add(
-        FixAction(
-          sku: product.sku,
-          title: item,
-          detail:
-              '${product.name}: skor ${product.score}/100, iade oranı ${percent(product.returnRate)}. Önce bu düzeltme yapılmalı.',
-          score: product.score,
-          risk: product.risk,
-        ),
-      );
-    }
+    actions.addAll(product.fixActions.take(3));
   }
 
   actions.sort((a, b) {
@@ -1896,6 +2248,61 @@ List<FixAction> buildFixActions(List<ProductInsight> products) {
     return riskCompare == 0 ? a.score.compareTo(b.score) : riskCompare;
   });
   return actions.take(12).toList();
+}
+
+List<FixAction> fixActionsForProduct({
+  required RawProduct product,
+  required List<String> improvements,
+  required int score,
+  required RiskLevel risk,
+  required double returnRate,
+}) {
+  return improvements.asMap().entries.map((entry) {
+    final title = entry.value;
+    return FixAction(
+      id: fixActionId(product.sku, title),
+      sku: product.sku,
+      title: title,
+      detail:
+          '${product.name}: skor $score/100, iade oranı ${percent(returnRate)}. Önce bu düzeltme yapılmalı.',
+      score: score,
+      risk: risk,
+    );
+  }).toList();
+}
+
+String fixActionId(String sku, String title) {
+  return fixMatchKey(sku, title);
+}
+
+String fixMatchKey(String sku, String title) {
+  return '${sku.trim().toUpperCase()}:${normalizeFixTitle(title)}';
+}
+
+String normalizeFixTitle(String title) {
+  const replacements = {
+    'ı': 'i',
+    'İ': 'i',
+    'ğ': 'g',
+    'Ğ': 'g',
+    'ü': 'u',
+    'Ü': 'u',
+    'ş': 's',
+    'Ş': 's',
+    'ö': 'o',
+    'Ö': 'o',
+    'ç': 'c',
+    'Ç': 'c',
+  };
+  final buffer = StringBuffer();
+  for (final rune in title.trim().toLowerCase().runes) {
+    final char = String.fromCharCode(rune);
+    buffer.write(replacements[char] ?? char);
+  }
+  return buffer
+      .toString()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
 }
 
 List<RawProduct> parseCsvProducts(String csv) {
