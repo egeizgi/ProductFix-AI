@@ -12,10 +12,305 @@ String get appTenantId {
 }
 
 String get completedFixStorageKey => 'productfix.completedFixes.$appTenantId';
+const appSettingsStorageKey = 'productfix.uiSettings';
 
 void main() {
   runApp(const ProductFixApp());
 }
+
+enum AppLanguage { tr, en }
+
+class AppScope extends InheritedWidget {
+  const AppScope({
+    super.key,
+    required this.language,
+    required this.darkMode,
+    required this.onLanguageChanged,
+    required this.onDarkModeChanged,
+    required super.child,
+  });
+
+  final AppLanguage language;
+  final bool darkMode;
+  final ValueChanged<AppLanguage> onLanguageChanged;
+  final ValueChanged<bool> onDarkModeChanged;
+
+  static AppScope of(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<AppScope>()!;
+  }
+
+  String text(String key) {
+    return (_translations[key] ?? const {})[language] ?? key;
+  }
+
+  AppPalette get colors => AppPalette(darkMode);
+
+  @override
+  bool updateShouldNotify(AppScope oldWidget) {
+    return language != oldWidget.language || darkMode != oldWidget.darkMode;
+  }
+}
+
+String tr(BuildContext context, String key) => AppScope.of(context).text(key);
+
+class AppPalette {
+  const AppPalette(this.dark);
+
+  final bool dark;
+
+  Color get page => dark ? const Color(0xFF101413) : AppColors.page;
+  Color get sidebar => dark ? const Color(0xFF151B19) : const Color(0xFFFBFCFA);
+  Color get surface => dark ? const Color(0xFF1A211F) : Colors.white;
+  Color get surfaceAlt =>
+      dark ? const Color(0xFF202925) : const Color(0xFFFCFDFC);
+  Color get highlight =>
+      dark ? const Color(0xFF2A2419) : const Color(0xFFFFF8E8);
+  Color get warningSurface =>
+      dark ? const Color(0xFF2A2419) : const Color(0xFFFFF7E8);
+  Color get aiSurface =>
+      dark ? const Color(0xFF162131) : const Color(0xFFF4F8FE);
+  Color get line => dark ? const Color(0xFF33413D) : AppColors.line;
+  Color get text => dark ? const Color(0xFFE8F0ED) : const Color(0xFF17211F);
+  Color get muted => dark ? const Color(0xFFAAB7B3) : AppColors.muted;
+}
+
+const _translations = <String, Map<AppLanguage, String>>{
+  'sidebar.subtitle': {
+    AppLanguage.tr: 'Ürün sayfası analiz motoru',
+    AppLanguage.en: 'Product page analysis engine',
+  },
+  'settings.language': {AppLanguage.tr: 'Dil', AppLanguage.en: 'Language'},
+  'settings.background': {
+    AppLanguage.tr: 'Koyu arka plan',
+    AppLanguage.en: 'Dark background',
+  },
+  'nav.dashboard': {AppLanguage.tr: 'Dashboard', AppLanguage.en: 'Dashboard'},
+  'nav.products': {AppLanguage.tr: 'Ürünler', AppLanguage.en: 'Products'},
+  'nav.returns': {
+    AppLanguage.tr: 'İade Analizi',
+    AppLanguage.en: 'Return Analysis',
+  },
+  'nav.fixCenter': {AppLanguage.tr: 'Fix Center', AppLanguage.en: 'Fix Center'},
+  'dashboard.subtitle': {
+    AppLanguage.tr:
+        'Ürün sayfası kalitesi, iade riski ve aksiyon önceliği tek yerde.',
+    AppLanguage.en:
+        'Product page quality, return risk, and action priority in one place.',
+  },
+  'products.subtitle': {
+    AppLanguage.tr:
+        'Her ürün için skor, açık iyileştirme listesi, AI açıklama taslağı ve satın alma öncesi uyarı.',
+    AppLanguage.en:
+        'Score, open fixes, AI description draft, and buyer warning for every product.',
+  },
+  'returns.subtitle': {
+    AppLanguage.tr:
+        'İade sebeplerini ürün, kategori ve problem teması bazında grafiklerle oku.',
+    AppLanguage.en:
+        'Read return reasons by product, category, and problem theme.',
+  },
+  'fix.subtitle': {
+    AppLanguage.tr:
+        'Önce parayı kaçıran ürünlere dokun: yüksek iade, düşük skor ve net yapılacaklar.',
+    AppLanguage.en:
+        'Start with the products leaking revenue: high returns, low scores, clear fixes.',
+  },
+  'button.csv': {AppLanguage.tr: 'CSV yapıştır', AppLanguage.en: 'Paste CSV'},
+  'button.manual': {
+    AppLanguage.tr: 'Manuel ürün',
+    AppLanguage.en: 'Manual product'
+  },
+  'button.manualLong': {
+    AppLanguage.tr: 'Manuel ürün gir',
+    AppLanguage.en: 'Add manually',
+  },
+  'button.done': {AppLanguage.tr: 'Tamamlandı', AppLanguage.en: 'Done'},
+  'button.undo': {AppLanguage.tr: 'Geri al', AppLanguage.en: 'Undo'},
+  'section.priority': {AppLanguage.tr: 'Öncelik', AppLanguage.en: 'Priority'},
+  'section.worstProducts': {
+    AppLanguage.tr: 'En problemli ürünler',
+    AppLanguage.en: 'Most problematic products',
+  },
+  'section.signal': {
+    AppLanguage.tr: 'Sinyal dağılımı',
+    AppLanguage.en: 'Signal distribution',
+  },
+  'section.problemThemes': {
+    AppLanguage.tr: 'Ana problem temaları',
+    AppLanguage.en: 'Main problem themes',
+  },
+  'section.funnel': {
+    AppLanguage.tr: 'Funnel sağlığı',
+    AppLanguage.en: 'Funnel health',
+  },
+  'section.funnelTitle': {
+    AppLanguage.tr: 'Görüntüleme, sepete ekleme ve satın alma akışı',
+    AppLanguage.en: 'Views, add-to-cart, and purchase flow',
+  },
+  'section.themeChart': {
+    AppLanguage.tr: 'Tema grafiği',
+    AppLanguage.en: 'Theme chart',
+  },
+  'section.returnSignal': {
+    AppLanguage.tr: 'İade sinyali yoğunluğu',
+    AppLanguage.en: 'Return signal density',
+  },
+  'section.productChart': {
+    AppLanguage.tr: 'Ürün grafiği',
+    AppLanguage.en: 'Product chart',
+  },
+  'section.productReturn': {
+    AppLanguage.tr: 'Ürün bazlı iade oranı',
+    AppLanguage.en: 'Return rate by product',
+  },
+  'section.category': {
+    AppLanguage.tr: 'Kategori kırılımı',
+    AppLanguage.en: 'Category breakdown',
+  },
+  'section.categoryRisk': {
+    AppLanguage.tr: 'Kategoriye göre risk',
+    AppLanguage.en: 'Risk by category',
+  },
+  'section.matrix': {
+    AppLanguage.tr: 'Sebep matrisi',
+    AppLanguage.en: 'Reason matrix',
+  },
+  'section.repeating': {
+    AppLanguage.tr: 'Ürünlerde tekrar eden problemler',
+    AppLanguage.en: 'Recurring product issues',
+  },
+  'section.reasonable': {
+    AppLanguage.tr: 'Reasonable öncelik',
+    AppLanguage.en: 'Reasonable priority',
+  },
+  'section.today': {
+    AppLanguage.tr: 'Bugün yapılacak işler',
+    AppLanguage.en: "Today's fixes",
+  },
+  'empty.doneTitle': {
+    AppLanguage.tr: 'Bugün yapılacak iş kalmadı',
+    AppLanguage.en: 'No fixes left for today',
+  },
+  'empty.doneMessage': {
+    AppLanguage.tr: 'Tamamlanan fixler ürün kartlarında yeşil olarak görünür.',
+    AppLanguage.en: 'Completed fixes appear in green on product cards.',
+  },
+  'metric.products': {AppLanguage.tr: 'Ürün', AppLanguage.en: 'Products'},
+  'metric.avgScore': {
+    AppLanguage.tr: 'Ortalama skor',
+    AppLanguage.en: 'Average score',
+  },
+  'metric.highRisk': {
+    AppLanguage.tr: 'Yüksek risk',
+    AppLanguage.en: 'High risk',
+  },
+  'metric.biggestLoss': {
+    AppLanguage.tr: 'En büyük kayıp',
+    AppLanguage.en: 'Biggest leak',
+  },
+  'product.returnRate': {
+    AppLanguage.tr: 'İade oranı',
+    AppLanguage.en: 'Return rate',
+  },
+  'product.aiNoteTile': {
+    AppLanguage.tr: 'Önerilen açıklama ve AI yardımcı notu',
+    AppLanguage.en: 'Suggested description and AI assistant note',
+  },
+  'fix.improvements': {
+    AppLanguage.tr: 'Net yapılacak iyileştirmeler',
+    AppLanguage.en: 'Clear fixes to make',
+  },
+  'fix.none': {
+    AppLanguage.tr: 'Bu üründe açık fix kalmadı.',
+    AppLanguage.en: 'No open fixes left for this product.',
+  },
+  'fix.goProduct': {
+    AppLanguage.tr: 'İlgili ürüne gitmek için tıkla',
+    AppLanguage.en: 'Click to open product',
+  },
+  'ai.description': {
+    AppLanguage.tr: 'AI açıklama taslağı',
+    AppLanguage.en: 'AI description draft',
+  },
+  'ai.check': {
+    AppLanguage.tr: 'AI kontrol notu',
+    AppLanguage.en: 'AI check note'
+  },
+  'ai.warning': {
+    AppLanguage.tr: 'Satın alma öncesi mini uyarı',
+    AppLanguage.en: 'Pre-purchase mini warning',
+  },
+  'fix.count': {AppLanguage.tr: 'aksiyon', AppLanguage.en: 'actions'},
+  'risk.low': {AppLanguage.tr: 'Düşük risk', AppLanguage.en: 'Low risk'},
+  'risk.medium': {AppLanguage.tr: 'Orta risk', AppLanguage.en: 'Medium risk'},
+  'risk.high': {AppLanguage.tr: 'Yüksek risk', AppLanguage.en: 'High risk'},
+  'chip.conversion': {AppLanguage.tr: 'Dönüşüm', AppLanguage.en: 'Conversion'},
+  'chip.cartPurchase': {
+    AppLanguage.tr: 'Sepetten satın alma',
+    AppLanguage.en: 'Cart to purchase',
+  },
+  'chip.photo': {AppLanguage.tr: 'Fotoğraf', AppLanguage.en: 'Photo'},
+  'button.cancel': {AppLanguage.tr: 'Vazgeç', AppLanguage.en: 'Cancel'},
+  'button.analyze': {AppLanguage.tr: 'Analiz et', AppLanguage.en: 'Analyze'},
+  'csv.help': {
+    AppLanguage.tr:
+        'Aynı kolon başlıklarıyla ürünleri yapıştır. Veriler analiz hattına alınır.',
+    AppLanguage.en:
+        'Paste products with the same column headers. The data will enter the analysis pipeline.',
+  },
+  'csv.error': {
+    AppLanguage.tr: 'CSV okunamadı. Başlıkları ve virgülleri kontrol et.',
+    AppLanguage.en: 'CSV could not be read. Check the headers and commas.',
+  },
+  'manual.title': {
+    AppLanguage.tr: 'Manuel ürün girişi',
+    AppLanguage.en: 'Manual product entry',
+  },
+  'manual.productName': {
+    AppLanguage.tr: 'Ürün adı',
+    AppLanguage.en: 'Product name'
+  },
+  'manual.category': {AppLanguage.tr: 'Kategori', AppLanguage.en: 'Category'},
+  'manual.views': {AppLanguage.tr: 'Görüntülenme', AppLanguage.en: 'Views'},
+  'manual.addToCart': {
+    AppLanguage.tr: 'Sepete ekleme',
+    AppLanguage.en: 'Add to cart',
+  },
+  'manual.purchases': {
+    AppLanguage.tr: 'Satın alma',
+    AppLanguage.en: 'Purchases'
+  },
+  'manual.returns': {AppLanguage.tr: 'İade', AppLanguage.en: 'Returns'},
+  'manual.photoCount': {
+    AppLanguage.tr: 'Fotoğraf sayısı',
+    AppLanguage.en: 'Photo count',
+  },
+  'manual.description': {
+    AppLanguage.tr: 'Açıklama',
+    AppLanguage.en: 'Description'
+  },
+  'manual.reviews': {AppLanguage.tr: 'Yorumlar', AppLanguage.en: 'Reviews'},
+  'manual.returnReasons': {
+    AppLanguage.tr: 'İade nedenleri',
+    AppLanguage.en: 'Return reasons',
+  },
+  'manual.sizeChart': {
+    AppLanguage.tr: 'Beden tablosu var',
+    AppLanguage.en: 'Has size chart',
+  },
+  'manual.modelPhoto': {
+    AppLanguage.tr: 'Kullanım/model fotoğrafı var',
+    AppLanguage.en: 'Has use/model photo',
+  },
+  'manual.convert': {
+    AppLanguage.tr: 'CSV’ye çevir ve analiz et',
+    AppLanguage.en: 'Convert to CSV and analyze',
+  },
+  'validation.required': {
+    AppLanguage.tr: 'Zorunlu',
+    AppLanguage.en: 'Required'
+  },
+};
 
 class ProductFixApp extends StatelessWidget {
   const ProductFixApp({super.key});
@@ -25,14 +320,7 @@ class ProductFixApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ProductFix AI',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.green,
-          brightness: Brightness.light,
-        ),
-        scaffoldBackgroundColor: AppColors.page,
-        useMaterial3: true,
-      ),
+      theme: _buildTheme(false),
       home: const ProductFixShell(),
     );
   }
@@ -48,6 +336,8 @@ class ProductFixShell extends StatefulWidget {
 class _ProductFixShellState extends State<ProductFixShell> {
   AppSection selectedSection = AppSection.dashboard;
   String? highlightedSku;
+  AppLanguage language = AppLanguage.tr;
+  bool darkMode = false;
   final List<RawProduct> rawProducts = [...sampleProducts];
   final Set<String> completedFixIds = {};
   final Set<String> completedFixKeys = {};
@@ -60,6 +350,7 @@ class _ProductFixShellState extends State<ProductFixShell> {
   @override
   void initState() {
     super.initState();
+    _loadUiSettings();
     _loadCompletedFixes();
   }
 
@@ -72,48 +363,89 @@ class _ProductFixShellState extends State<ProductFixShell> {
     final openActions =
         actions.where((action) => !_isFixCompleted(action)).toList();
 
-    return Scaffold(
-      body: SafeArea(
-        child: Row(
-          children: [
-            _Sidebar(
-              selectedSection: selectedSection,
-              onSelected: (section) {
-                setState(() {
-                  selectedSection = section;
-                  highlightedSku = null;
-                });
-              },
-            ),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: _SectionBody(
-                  key: ValueKey(selectedSection),
+    final palette = AppPalette(darkMode);
+    return AppScope(
+      language: language,
+      darkMode: darkMode,
+      onLanguageChanged: _setLanguage,
+      onDarkModeChanged: _setDarkMode,
+      child: Theme(
+        data: _buildTheme(darkMode),
+        child: Scaffold(
+          backgroundColor: palette.page,
+          body: SafeArea(
+            child: Row(
+              children: [
+                _Sidebar(
                   selectedSection: selectedSection,
-                  products: insights,
-                  summary: summary,
-                  themes: themes,
-                  actions: openActions,
-                  completedFixIds: completedFixIds,
-                  completedFixKeys: completedFixKeys,
-                  highlightedSku: highlightedSku,
-                  onAddManual: _openManualProductDialog,
-                  onPasteCsv: _openCsvDialog,
-                  onActionTap: (action) {
+                  onSelected: (section) {
                     setState(() {
-                      selectedSection = AppSection.products;
-                      highlightedSku = action.sku;
+                      selectedSection = section;
+                      highlightedSku = null;
                     });
                   },
-                  onToggleFix: _toggleFix,
                 ),
-              ),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: _SectionBody(
+                      key: ValueKey(selectedSection),
+                      selectedSection: selectedSection,
+                      products: insights,
+                      summary: summary,
+                      themes: themes,
+                      actions: openActions,
+                      completedFixIds: completedFixIds,
+                      completedFixKeys: completedFixKeys,
+                      highlightedSku: highlightedSku,
+                      onAddManual: _openManualProductDialog,
+                      onPasteCsv: _openCsvDialog,
+                      onActionTap: (action) {
+                        setState(() {
+                          selectedSection = AppSection.products;
+                          highlightedSku = action.sku;
+                        });
+                      },
+                      onToggleFix: _toggleFix,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  void _loadUiSettings() {
+    final raw = html.window.localStorage[appSettingsStorageKey];
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      language = decoded['language'] == 'en' ? AppLanguage.en : AppLanguage.tr;
+      darkMode = decoded['darkMode'] == true;
+    } catch (_) {
+      html.window.localStorage.remove(appSettingsStorageKey);
+    }
+  }
+
+  void _setLanguage(AppLanguage value) {
+    setState(() => language = value);
+    _saveUiSettings();
+  }
+
+  void _setDarkMode(bool value) {
+    setState(() => darkMode = value);
+    _saveUiSettings();
+  }
+
+  void _saveUiSettings() {
+    html.window.localStorage[appSettingsStorageKey] = jsonEncode({
+      'language': language.name,
+      'darkMode': darkMode,
+    });
   }
 
   Future<void> _openManualProductDialog() async {
@@ -339,18 +671,17 @@ class DashboardView extends StatelessWidget {
 
     return _Page(
       title: 'Dashboard',
-      subtitle:
-          'Ürün sayfası kalitesi, iade riski ve aksiyon önceliği tek yerde.',
+      subtitle: tr(context, 'dashboard.subtitle'),
       actions: [
         OutlinedButton.icon(
           onPressed: onPasteCsv,
           icon: const Icon(Icons.table_chart_outlined),
-          label: const Text('CSV yapıştır'),
+          label: Text(tr(context, 'button.csv')),
         ),
         FilledButton.icon(
           onPressed: onAddManual,
           icon: const Icon(Icons.add),
-          label: const Text('Manuel ürün'),
+          label: Text(tr(context, 'button.manual')),
         ),
       ],
       children: [
@@ -361,8 +692,8 @@ class DashboardView extends StatelessWidget {
             final narrow = constraints.maxWidth < 900;
             final widgets = [
               _PanelSection(
-                eyebrow: 'Öncelik',
-                title: 'En problemli ürünler',
+                eyebrow: tr(context, 'section.priority'),
+                title: tr(context, 'section.worstProducts'),
                 child: Column(
                   children: [
                     for (final product in worstProducts)
@@ -371,13 +702,13 @@ class DashboardView extends StatelessWidget {
                 ),
               ),
               _PanelSection(
-                eyebrow: 'Sinyal dağılımı',
-                title: 'Ana problem temaları',
+                eyebrow: tr(context, 'section.signal'),
+                title: tr(context, 'section.problemThemes'),
                 child: Column(
                   children: [
                     for (final theme in themes)
                       _HorizontalBar(
-                          label: theme.rule.label,
+                          label: translateIssueLabel(context, theme.rule),
                           value: theme.count,
                           max: summary.totalProducts),
                   ],
@@ -404,8 +735,8 @@ class DashboardView extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         _PanelSection(
-          eyebrow: 'Funnel sağlığı',
-          title: 'Görüntüleme, sepete ekleme ve satın alma akışı',
+          eyebrow: tr(context, 'section.funnel'),
+          title: tr(context, 'section.funnelTitle'),
           child: _FunnelChart(products: products),
         ),
       ],
@@ -436,19 +767,18 @@ class ProductsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Page(
-      title: 'Ürünler',
-      subtitle:
-          'Her ürün için skor, açık iyileştirme listesi, AI açıklama taslağı ve satın alma öncesi uyarı.',
+      title: tr(context, 'nav.products'),
+      subtitle: tr(context, 'products.subtitle'),
       actions: [
         OutlinedButton.icon(
           onPressed: onPasteCsv,
           icon: const Icon(Icons.table_rows_outlined),
-          label: const Text('CSV yapıştır'),
+          label: Text(tr(context, 'button.csv')),
         ),
         FilledButton.icon(
           onPressed: onAddManual,
           icon: const Icon(Icons.add_box_outlined),
-          label: const Text('Manuel ürün gir'),
+          label: Text(tr(context, 'button.manualLong')),
         ),
       ],
       children: [
@@ -477,21 +807,20 @@ class ReturnsView extends StatelessWidget {
         (max, product) => product.returnRate > max ? product.returnRate : max);
 
     return _Page(
-      title: 'İade Analizi',
-      subtitle:
-          'İade sebeplerini ürün, kategori ve problem teması bazında grafiklerle oku.',
+      title: tr(context, 'nav.returns'),
+      subtitle: tr(context, 'returns.subtitle'),
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
             final narrow = constraints.maxWidth < 940;
             final left = _PanelSection(
-              eyebrow: 'Tema grafiği',
-              title: 'İade sinyali yoğunluğu',
+              eyebrow: tr(context, 'section.themeChart'),
+              title: tr(context, 'section.returnSignal'),
               child: Column(
                 children: [
                   for (final theme in themes)
                     _HorizontalBar(
-                      label: theme.rule.label,
+                      label: translateIssueLabel(context, theme.rule),
                       value: theme.count,
                       max: products.length,
                       color: issueColor(theme.rule.key),
@@ -500,8 +829,8 @@ class ReturnsView extends StatelessWidget {
               ),
             );
             final right = _PanelSection(
-              eyebrow: 'Ürün grafiği',
-              title: 'Ürün bazlı iade oranı',
+              eyebrow: tr(context, 'section.productChart'),
+              title: tr(context, 'section.productReturn'),
               child: Column(
                 children: [
                   for (final product in products)
@@ -537,13 +866,13 @@ class ReturnsView extends StatelessWidget {
             final narrow = constraints.maxWidth < 940;
             final charts = [
               _PanelSection(
-                eyebrow: 'Kategori kırılımı',
-                title: 'Kategoriye göre risk',
+                eyebrow: tr(context, 'section.category'),
+                title: tr(context, 'section.categoryRisk'),
                 child: _CategoryRiskChart(products: products),
               ),
               _PanelSection(
-                eyebrow: 'Sebep matrisi',
-                title: 'Ürünlerde tekrar eden problemler',
+                eyebrow: tr(context, 'section.matrix'),
+                title: tr(context, 'section.repeating'),
                 child: _IssueMatrix(products: products),
               ),
             ];
@@ -583,19 +912,18 @@ class FixCenterView extends StatelessWidget {
   Widget build(BuildContext context) {
     return _Page(
       title: 'Fix Center',
-      subtitle:
-          'Önce parayı kaçıran ürünlere dokun: yüksek iade, düşük skor ve net yapılacaklar.',
+      subtitle: tr(context, 'fix.subtitle'),
       children: [
         _PanelSection(
-          eyebrow: 'Reasonable öncelik',
-          title: 'Bugün yapılacak işler',
-          trailing: _Pill('${actions.length} aksiyon', color: AppColors.blue),
+          eyebrow: tr(context, 'section.reasonable'),
+          title: tr(context, 'section.today'),
+          trailing: _Pill('${actions.length} ${tr(context, 'fix.count')}',
+              color: AppColors.blue),
           child: actions.isEmpty
-              ? const _EmptyState(
+              ? _EmptyState(
                   icon: Icons.verified_outlined,
-                  title: 'Bugün yapılacak iş kalmadı',
-                  message:
-                      'Tamamlanan fixler ürün kartlarında yeşil olarak görünür.',
+                  title: tr(context, 'empty.doneTitle'),
+                  message: tr(context, 'empty.doneMessage'),
                 )
               : Column(
                   children: [
@@ -621,12 +949,14 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scope = AppScope.of(context);
+    final palette = scope.colors;
     return Container(
       width: 260,
       padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFBFCFA),
-        border: Border(right: BorderSide(color: AppColors.line)),
+      decoration: BoxDecoration(
+        color: palette.sidebar,
+        border: Border(right: BorderSide(color: palette.line)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -648,32 +978,53 @@ class _Sidebar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('ProductFix AI',
+                    const Text('ProductFix AI',
                         style: TextStyle(fontWeight: FontWeight.w900)),
-                    SizedBox(height: 3),
+                    const SizedBox(height: 3),
                     Text(
-                      'Ürün sayfası analiz motoru',
-                      style: TextStyle(color: AppColors.muted, fontSize: 12),
+                      tr(context, 'sidebar.subtitle'),
+                      style: TextStyle(color: palette.muted, fontSize: 12),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 34),
+          const SizedBox(height: 24),
+          SegmentedButton<AppLanguage>(
+            segments: const [
+              ButtonSegment(value: AppLanguage.tr, label: Text('TR')),
+              ButtonSegment(value: AppLanguage.en, label: Text('EN')),
+            ],
+            selected: {scope.language},
+            onSelectionChanged: (values) {
+              scope.onLanguageChanged(values.first);
+            },
+          ),
+          const SizedBox(height: 10),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(tr(context, 'settings.background')),
+            value: scope.darkMode,
+            onChanged: scope.onDarkModeChanged,
+          ),
+          const SizedBox(height: 18),
           for (final section in AppSection.values)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: ListTile(
                 selected: section == selectedSection,
-                selectedTileColor: AppColors.greenSoft,
+                selectedTileColor: scope.darkMode
+                    ? AppColors.green.withValues(alpha: 0.18)
+                    : AppColors.greenSoft,
                 dense: true,
                 leading: Icon(section.icon, size: 20),
-                title: Text(section.label),
+                title: Text(section.label(context)),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
                 onTap: () => onSelected(section),
@@ -700,6 +1051,7 @@ class _Page extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -724,8 +1076,8 @@ class _Page extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                        color: AppColors.muted, fontSize: 16, height: 1.5),
+                    style: TextStyle(
+                        color: palette.muted, fontSize: 16, height: 1.5),
                   ),
                 ],
               ),
@@ -749,14 +1101,26 @@ class _MetricGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final metrics = [
-      ('Ürün', '${summary.totalProducts}', Icons.inventory_2_outlined),
-      ('Ortalama skor', '${summary.averageScore}', Icons.speed_outlined),
       (
-        'Yüksek risk',
+        tr(context, 'metric.products'),
+        '${summary.totalProducts}',
+        Icons.inventory_2_outlined
+      ),
+      (
+        tr(context, 'metric.avgScore'),
+        '${summary.averageScore}',
+        Icons.speed_outlined
+      ),
+      (
+        tr(context, 'metric.highRisk'),
         '${summary.highRiskProducts}',
         Icons.warning_amber_outlined
       ),
-      ('En büyük kayıp', summary.topProblem ?? '-', Icons.insights_outlined),
+      (
+        tr(context, 'metric.biggestLoss'),
+        summary.topProblem ?? '-',
+        Icons.insights_outlined
+      ),
     ];
 
     return LayoutBuilder(
@@ -831,15 +1195,16 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = scoreColor(product.score);
+    final palette = AppScope.of(context).colors;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: highlighted ? const Color(0xFFFFF8E8) : const Color(0xFFFCFDFC),
+        color: highlighted ? palette.highlight : palette.surfaceAlt,
         border: Border.all(
-            color: highlighted ? AppColors.amber : AppColors.line,
+            color: highlighted ? AppColors.amber : palette.line,
             width: highlighted ? 2 : 1),
         borderRadius: BorderRadius.circular(8),
         boxShadow: highlighted
@@ -903,11 +1268,14 @@ class _ProductCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _Chip('Dönüşüm: ${percent(product.conversionRate)}'),
                     _Chip(
-                        'Sepetten satın alma: ${percent(product.cartConversionRate)}'),
-                    _Chip('İade oranı: ${percent(product.returnRate)}'),
-                    _Chip('Fotoğraf: ${product.photoCount}'),
+                        '${tr(context, 'chip.conversion')}: ${percent(product.conversionRate)}'),
+                    _Chip(
+                        '${tr(context, 'chip.cartPurchase')}: ${percent(product.cartConversionRate)}'),
+                    _Chip(
+                        '${tr(context, 'product.returnRate')}: ${percent(product.returnRate)}'),
+                    _Chip(
+                        '${tr(context, 'chip.photo')}: ${product.photoCount}'),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -921,13 +1289,14 @@ class _ProductCard extends StatelessWidget {
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   childrenPadding: EdgeInsets.zero,
-                  title: const Row(
+                  title: Row(
                     children: [
-                      Icon(Icons.auto_awesome, size: 18, color: AppColors.blue),
-                      SizedBox(width: 8),
+                      const Icon(Icons.auto_awesome,
+                          size: 18, color: AppColors.blue),
+                      const SizedBox(width: 8),
                       Text(
-                        'Önerilen açıklama ve AI yardımcı notu',
-                        style: TextStyle(
+                        tr(context, 'product.aiNoteTile'),
+                        style: const TextStyle(
                             color: AppColors.blue, fontWeight: FontWeight.w900),
                       ),
                     ],
@@ -961,23 +1330,24 @@ class _ImprovementBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = product.fixActions.take(4).toList();
+    final palette = AppScope.of(context).colors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7E8),
+        color: palette.warningSurface,
         border: Border.all(color: const Color(0xFFFFD28C)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.priority_high, size: 18, color: AppColors.amber),
-              SizedBox(width: 8),
-              Text('Net yapılacak iyileştirmeler',
-                  style: TextStyle(fontWeight: FontWeight.w900)),
+              const Icon(Icons.priority_high, size: 18, color: AppColors.amber),
+              const SizedBox(width: 8),
+              Text(tr(context, 'fix.improvements'),
+                  style: const TextStyle(fontWeight: FontWeight.w900)),
             ],
           ),
           const SizedBox(height: 10),
@@ -989,11 +1359,11 @@ class _ImprovementBox extends StatelessWidget {
               onToggle: () => onToggleFix(action),
             ),
           if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 2),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
               child: Text(
-                'Bu üründe açık fix kalmadı.',
-                style: TextStyle(
+                tr(context, 'fix.none'),
+                style: const TextStyle(
                     color: AppColors.green, fontWeight: FontWeight.w800),
               ),
             ),
@@ -1016,12 +1386,14 @@ class _InlineFixItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color:
-            completed ? AppColors.green.withValues(alpha: 0.1) : Colors.white,
+        color: completed
+            ? AppColors.green.withValues(alpha: 0.1)
+            : palette.surface,
         border: Border.all(
             color: completed ? AppColors.green : const Color(0xFFFFD28C)),
         borderRadius: BorderRadius.circular(8),
@@ -1037,7 +1409,7 @@ class _InlineFixItem extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              action.title,
+              translateFixText(context, action.title),
               style: TextStyle(
                 height: 1.35,
                 decoration: completed ? TextDecoration.lineThrough : null,
@@ -1048,7 +1420,9 @@ class _InlineFixItem extends StatelessWidget {
           const SizedBox(width: 8),
           TextButton(
             onPressed: onToggle,
-            child: Text(completed ? 'Geri al' : 'Tamamlandı'),
+            child: Text(completed
+                ? tr(context, 'button.undo')
+                : tr(context, 'button.done')),
           ),
         ],
       ),
@@ -1063,6 +1437,7 @@ class _AiSuggestion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 8),
@@ -1070,28 +1445,28 @@ class _AiSuggestion extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.blueSoft),
         borderRadius: BorderRadius.circular(8),
-        color: const Color(0xFFF4F8FE),
+        color: palette.aiSurface,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('AI açıklama taslağı',
-              style: TextStyle(fontWeight: FontWeight.w900)),
+          Text(tr(context, 'ai.description'),
+              style: const TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Text(product.suggestedDescription,
-              style: const TextStyle(color: AppColors.muted, height: 1.55)),
+              style: TextStyle(color: palette.muted, height: 1.55)),
           const SizedBox(height: 12),
-          const Text('AI kontrol notu',
-              style: TextStyle(fontWeight: FontWeight.w900)),
+          Text(tr(context, 'ai.check'),
+              style: const TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Text(product.aiAssistantNote,
-              style: const TextStyle(color: AppColors.muted, height: 1.55)),
+              style: TextStyle(color: palette.muted, height: 1.55)),
           const SizedBox(height: 12),
-          const Text('Satın alma öncesi mini uyarı',
-              style: TextStyle(fontWeight: FontWeight.w900)),
+          Text(tr(context, 'ai.warning'),
+              style: const TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Text(product.buyerWarning,
-              style: const TextStyle(color: AppColors.muted, height: 1.55)),
+              style: TextStyle(color: palette.muted, height: 1.55)),
         ],
       ),
     );
@@ -1111,6 +1486,7 @@ class _FixActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1120,9 +1496,9 @@ class _FixActionCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            border: Border.all(color: AppColors.line),
+            border: Border.all(color: palette.line),
             borderRadius: BorderRadius.circular(8),
-            color: Colors.white,
+            color: palette.surface,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1133,14 +1509,13 @@ class _FixActionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(action.title,
+                    Text(translateFixText(context, action.title),
                         style: const TextStyle(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 5),
                     Text(action.detail,
-                        style: const TextStyle(
-                            color: AppColors.muted, height: 1.45)),
+                        style: TextStyle(color: palette.muted, height: 1.45)),
                     const SizedBox(height: 8),
-                    Text('İlgili ürüne gitmek için tıkla',
+                    Text(tr(context, 'fix.goProduct'),
                         style: TextStyle(
                             color: riskColor(action.risk),
                             fontWeight: FontWeight.w800)),
@@ -1148,7 +1523,7 @@ class _FixActionCard extends StatelessWidget {
                     TextButton.icon(
                       onPressed: onToggle,
                       icon: const Icon(Icons.check_circle_outline, size: 18),
-                      label: const Text('Tamamlandı'),
+                      label: Text(tr(context, 'button.done')),
                     ),
                   ],
                 ),
@@ -1184,6 +1559,7 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -1201,7 +1577,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.muted),
+            style: TextStyle(color: palette.muted),
           ),
         ],
       ),
@@ -1235,7 +1611,7 @@ class _ManualProductDialogState extends State<_ManualProductDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Manuel ürün girişi'),
+      title: Text(tr(context, 'manual.title')),
       content: SizedBox(
         width: 760,
         child: Form(
@@ -1248,43 +1624,51 @@ class _ManualProductDialogState extends State<_ManualProductDialog> {
                   runSpacing: 12,
                   children: [
                     _Field(controller: sku, label: 'SKU'),
-                    _Field(controller: name, label: 'Ürün adı', required: true),
-                    _Field(controller: category, label: 'Kategori'),
+                    _Field(
+                        controller: name,
+                        label: tr(context, 'manual.productName'),
+                        required: true),
+                    _Field(
+                        controller: category,
+                        label: tr(context, 'manual.category')),
                     _Field(
                         controller: views,
-                        label: 'Görüntülenme',
+                        label: tr(context, 'manual.views'),
                         numeric: true),
                     _Field(
                         controller: addToCart,
-                        label: 'Sepete ekleme',
+                        label: tr(context, 'manual.addToCart'),
                         numeric: true),
                     _Field(
                         controller: purchases,
-                        label: 'Satın alma',
+                        label: tr(context, 'manual.purchases'),
                         numeric: true),
-                    _Field(controller: returns, label: 'İade', numeric: true),
+                    _Field(
+                        controller: returns,
+                        label: tr(context, 'manual.returns'),
+                        numeric: true),
                     _Field(
                         controller: photoCount,
-                        label: 'Fotoğraf sayısı',
+                        label: tr(context, 'manual.photoCount'),
                         numeric: true),
                   ],
                 ),
                 const SizedBox(height: 12),
                 _Field(
                     controller: description,
-                    label: 'Açıklama',
+                    label: tr(context, 'manual.description'),
                     wide: true,
                     maxLines: 3),
                 const SizedBox(height: 12),
                 _Field(
                     controller: reviews,
-                    label: 'Yorumlar',
+                    label: tr(context, 'manual.reviews'),
                     wide: true,
                     maxLines: 3),
                 const SizedBox(height: 12),
                 _Field(
                     controller: returnReasons,
-                    label: 'İade nedenleri',
+                    label: tr(context, 'manual.returnReasons'),
                     wide: true,
                     maxLines: 3),
                 const SizedBox(height: 8),
@@ -1292,13 +1676,13 @@ class _ManualProductDialogState extends State<_ManualProductDialog> {
                   value: hasSizeChart,
                   onChanged: (value) =>
                       setState(() => hasSizeChart = value ?? false),
-                  title: const Text('Beden tablosu var'),
+                  title: Text(tr(context, 'manual.sizeChart')),
                 ),
                 CheckboxListTile(
                   value: hasModelPhoto,
                   onChanged: (value) =>
                       setState(() => hasModelPhoto = value ?? false),
-                  title: const Text('Kullanım/model fotoğrafı var'),
+                  title: Text(tr(context, 'manual.modelPhoto')),
                 ),
               ],
             ),
@@ -1308,7 +1692,7 @@ class _ManualProductDialogState extends State<_ManualProductDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Vazgeç')),
+            child: Text(tr(context, 'button.cancel'))),
         FilledButton(
           onPressed: () {
             if (!formKey.currentState!.validate()) return;
@@ -1331,7 +1715,7 @@ class _ManualProductDialogState extends State<_ManualProductDialog> {
               ),
             );
           },
-          child: const Text('CSV’ye çevir ve analiz et'),
+          child: Text(tr(context, 'manual.convert')),
         ),
       ],
     );
@@ -1352,15 +1736,14 @@ class _CsvPasteDialogState extends State<_CsvPasteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('CSV yapıştır'),
+      title: Text(tr(context, 'button.csv')),
       content: SizedBox(
         width: 820,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-                'Aynı kolon başlıklarıyla ürünleri yapıştır. Veriler analiz hattına alınır.'),
+            Text(tr(context, 'csv.help')),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
@@ -1377,18 +1760,17 @@ class _CsvPasteDialogState extends State<_CsvPasteDialog> {
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Vazgeç')),
+            child: Text(tr(context, 'button.cancel'))),
         FilledButton(
           onPressed: () {
             final rows = parseCsvProducts(controller.text);
             if (rows.isEmpty) {
-              setState(() => error =
-                  'CSV okunamadı. Başlıkları ve virgülleri kontrol et.');
+              setState(() => error = tr(context, 'csv.error'));
               return;
             }
             Navigator.pop(context, rows);
           },
-          child: const Text('Analiz et'),
+          child: Text(tr(context, 'button.analyze')),
         ),
       ],
     );
@@ -1424,7 +1806,7 @@ class _Field extends StatelessWidget {
             labelText: label, border: const OutlineInputBorder()),
         validator: (value) {
           if (required && (value == null || value.trim().isEmpty)) {
-            return 'Zorunlu';
+            return tr(context, 'validation.required');
           }
           return null;
         },
@@ -1492,14 +1874,16 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: AppColors.line),
+        color: palette.surface,
+        border: Border.all(color: palette.line),
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1C2D2A).withValues(alpha: 0.09),
+            color: const Color(0xFF1C2D2A)
+                .withValues(alpha: palette.dark ? 0.28 : 0.09),
             blurRadius: 34,
             offset: const Offset(0, 12),
           ),
@@ -1579,7 +1963,7 @@ class _RiskPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = riskColor(risk);
-    return _Pill(risk.label, color: color);
+    return _Pill(risk.label(context), color: color);
   }
 }
 
@@ -1613,15 +1997,15 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.line),
+        border: Border.all(color: palette.line),
         borderRadius: BorderRadius.circular(8),
-        color: Colors.white,
+        color: palette.surface,
       ),
-      child: Text(text,
-          style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+      child: Text(text, style: TextStyle(color: palette.muted, fontSize: 13)),
     );
   }
 }
@@ -1634,12 +2018,13 @@ class _MiniProductRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCFDFC),
-        border: Border.all(color: AppColors.line),
+        color: palette.surfaceAlt,
+        border: Border.all(color: palette.line),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1856,14 +2241,16 @@ class _IssueMatrix extends StatelessWidget {
 }
 
 enum AppSection {
-  dashboard('Dashboard', Icons.dashboard_outlined),
-  products('Ürünler', Icons.inventory_2_outlined),
-  returns('İade Analizi', Icons.bar_chart_outlined),
-  fixCenter('Fix Center', Icons.task_alt_outlined);
+  dashboard('nav.dashboard', Icons.dashboard_outlined),
+  products('nav.products', Icons.inventory_2_outlined),
+  returns('nav.returns', Icons.bar_chart_outlined),
+  fixCenter('nav.fixCenter', Icons.task_alt_outlined);
 
-  const AppSection(this.label, this.icon);
-  final String label;
+  const AppSection(this.labelKey, this.icon);
+  final String labelKey;
   final IconData icon;
+
+  String label(BuildContext context) => tr(context, labelKey);
 }
 
 class RawProduct {
@@ -1976,12 +2363,14 @@ class IssueRule {
 }
 
 enum RiskLevel {
-  low('Düşük risk'),
-  medium('Orta risk'),
-  high('Yüksek risk');
+  low('risk.low'),
+  medium('risk.medium'),
+  high('risk.high');
 
-  const RiskLevel(this.label);
-  final String label;
+  const RiskLevel(this.labelKey);
+  final String labelKey;
+
+  String label(BuildContext context) => tr(context, labelKey);
 }
 
 class ProductInsight {
@@ -2305,6 +2694,45 @@ String normalizeFixTitle(String title) {
       .replaceAll(RegExp(r'^-+|-+$'), '');
 }
 
+String translateFixText(BuildContext context, String text) {
+  if (AppScope.of(context).language == AppLanguage.tr) return text;
+  return _fixTextTranslations[text] ?? text;
+}
+
+String translateIssueLabel(BuildContext context, IssueRule rule) {
+  if (AppScope.of(context).language == AppLanguage.tr) return rule.label;
+  return switch (rule.key) {
+    'size' => 'Unclear size/fit',
+    'color' => 'Visual expectation gap',
+    'quality' => 'Quality perception',
+    'technical' => 'Missing technical info',
+    _ => rule.label,
+  };
+}
+
+const _fixTextTranslations = {
+  'Beden veya kalıp bilgisini fiyatın hemen altına taşı.':
+      'Move size/fit information directly under the price.',
+  'Ürün görsellerine doğal ışık ve gerçek kullanım fotoğrafı ekle.':
+      'Add natural-light and real-use product photos.',
+  'Malzeme, doku ve kullanım hissini açıklamaya net ekle.':
+      'Clearly add material, texture, and usage feel to the description.',
+  'Teknik özellikleri madde madde ve eksiksiz göster.':
+      'Show technical specs as a complete bullet list.',
+  'Açıklamaya kullanım senaryosu, malzeme ve beklenti bilgisini 3 net cümleyle ekle.':
+      'Add use case, material, and expectation details in three clear sentences.',
+  'Beden tablosunu ürün fiyatının hemen altına sabitle.':
+      'Pin the size chart directly under the product price.',
+  'İlk 4 görsel içine gerçek kullanım veya model fotoğrafı ekle.':
+      'Add a real-use or model photo among the first four images.',
+  'En az 5 fotoğraf kullan: ön, yan, detay, kullanım, ölçek.':
+      'Use at least five photos: front, side, detail, use, and scale.',
+  'Ölçü/numara/boyut bilgisini madde madde görünür hale getir.':
+      'Make measurement, size, and dimension details visible as bullets.',
+  'Bu üründe kritik iyileştirme sinyali yok; haftalık izlemeye al.':
+      'No critical fix signal for this product; monitor it weekly.',
+};
+
 List<RawProduct> parseCsvProducts(String csv) {
   final rows = parseCsv(csv);
   if (rows.length < 2) return [];
@@ -2410,6 +2838,30 @@ bool boolValue(String value) =>
 double safeRate(int part, int total) => total == 0 ? 0 : part / total;
 
 String percent(double value) => '${(value * 100).round()}%';
+
+ThemeData _buildTheme(bool darkMode) {
+  final palette = AppPalette(darkMode);
+  final brightness = darkMode ? Brightness.dark : Brightness.light;
+  return ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColors.green,
+      brightness: brightness,
+    ),
+    scaffoldBackgroundColor: palette.page,
+    canvasColor: palette.page,
+    dialogTheme: DialogThemeData(backgroundColor: palette.surface),
+    textTheme: ThemeData(brightness: brightness).textTheme.apply(
+          bodyColor: palette.text,
+          displayColor: palette.text,
+        ),
+    inputDecorationTheme: InputDecorationTheme(
+      border: const OutlineInputBorder(),
+      filled: darkMode,
+      fillColor: palette.surfaceAlt,
+    ),
+    useMaterial3: true,
+  );
+}
 
 Color scoreColor(int score) {
   if (score < 50) return AppColors.red;
