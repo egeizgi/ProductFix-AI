@@ -82,6 +82,13 @@ pip install -r requirements.txt
 uvicorn productfix.api:app --reload
 ```
 
+For local development and tests, install the dev dependencies:
+
+```powershell
+cd backend
+pip install -r requirements-dev.txt
+```
+
 Run the sample analysis without starting the API:
 
 ```powershell
@@ -123,6 +130,8 @@ Required columns:
 
 The API persists uploaded CSV data per SaaS customer. Each `tenant_id` gets its own SQLite database under `backend/data/tenants/`, so customers do not have to upload the same CSV again.
 
+The backend currently allows all CORS origins for MVP convenience. Restrict this in production, ideally by reading the allowed frontend origin from an environment variable such as `FRONTEND_ORIGIN`.
+
 Useful endpoints:
 
 - `POST /tenants/{tenant_id}/products/import-csv`: import or update products from a CSV file, then return the tenant analysis.
@@ -138,7 +147,17 @@ ProductFix AI supports two backend analysis modes:
 - `rule_based`: deterministic scoring based on conversion, return rate, issue keywords, and missing product page signals.
 - `llm_powered`: keeps the rule-based score, then attaches structured AI-ready suggestions through `ai_suggestions.py`.
 
-The current `llm_powered` mode uses a local stub so the project runs without external API keys. Later, `generate_ai_fix(product)` can call OpenAI or a local model and keep the same response shape.
+Currently, the LLM-powered mode uses a local stub. It does not call a real LLM yet; `generate_ai_fix(product)` packages the existing `suggested_description` and `buyer_warning` fields into the same response shape the frontend expects. This keeps the demo runnable without external API keys while making the architecture ready for OpenAI, Gemini, Ollama, Hugging Face, or another LLM provider.
+
+A future provider switch can use an environment variable such as:
+
+```env
+AI_PROVIDER=stub
+AI_PROVIDER=openai
+AI_PROVIDER=ollama
+```
+
+That would let the same analysis flow stay in place while swapping the implementation behind `generate_ai_fix(product)` for a free local model, a hosted model, or a stronger paid provider.
 
 Example:
 
@@ -161,5 +180,6 @@ Backend tests cover the rule-based analysis engine, tenant storage, and FastAPI 
 
 ```powershell
 cd backend
+pip install -r requirements-dev.txt
 python -m pytest
 ```

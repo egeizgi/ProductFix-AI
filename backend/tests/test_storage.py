@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from uuid import uuid4
+from typing import Callable
 
 from productfix.storage import (
     complete_fix,
@@ -12,12 +12,10 @@ from productfix.storage import (
 )
 
 
-def _tenant_id() -> str:
-    return f"test-{uuid4().hex[:12]}"
-
-
-def test_upsert_products_persists_rows_per_tenant() -> None:
-    tenant_id = _tenant_id()
+def test_upsert_products_persists_rows_per_tenant(
+    tenant_id_factory: Callable[[str], str],
+) -> None:
+    tenant_id = tenant_id_factory()
 
     imported = upsert_products(
         tenant_id,
@@ -71,8 +69,10 @@ def test_upsert_products_persists_rows_per_tenant() -> None:
     assert products[0]["has_size_chart"] is True
 
 
-def test_completed_fixes_can_be_reopened_by_matching_title() -> None:
-    tenant_id = _tenant_id()
+def test_completed_fixes_can_be_reopened_by_matching_title(
+    tenant_id_factory: Callable[[str], str],
+) -> None:
+    tenant_id = tenant_id_factory()
 
     complete_fix(
         tenant_id,

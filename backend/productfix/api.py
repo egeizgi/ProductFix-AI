@@ -17,6 +17,7 @@ app = FastAPI(title="ProductFix AI API")
 
 app.add_middleware(
     CORSMiddleware,
+    # MVP only. Restrict this in production, ideally from a FRONTEND_ORIGIN env var.
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],

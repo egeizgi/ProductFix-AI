@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from uuid import uuid4
+from typing import Callable
 
 from fastapi.testclient import TestClient
 
 from productfix.api import app
-
-
-def _tenant_id() -> str:
-    return f"api-{uuid4().hex[:12]}"
 
 
 def test_health_endpoint() -> None:
@@ -21,9 +17,11 @@ def test_health_endpoint() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_import_csv_and_llm_powered_analysis() -> None:
+def test_import_csv_and_llm_powered_analysis(
+    tenant_id_factory: Callable[[str], str],
+) -> None:
     client = TestClient(app)
-    tenant_id = _tenant_id()
+    tenant_id = tenant_id_factory("api")
     sample_csv = Path("data/sample-products.csv").read_bytes()
 
     response = client.post(
@@ -40,9 +38,11 @@ def test_import_csv_and_llm_powered_analysis() -> None:
     assert "ai_fix" in body["products"][0]
 
 
-def test_completed_fix_is_hidden_from_open_fix_center() -> None:
+def test_completed_fix_is_hidden_from_open_fix_center(
+    tenant_id_factory: Callable[[str], str],
+) -> None:
     client = TestClient(app)
-    tenant_id = _tenant_id()
+    tenant_id = tenant_id_factory("api")
     sample_csv = Path("data/sample-products.csv").read_bytes()
 
     import_response = client.post(
