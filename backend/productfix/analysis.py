@@ -38,6 +38,24 @@ ISSUE_RULES = (
         words=("baglanti", "bağlantı", "pil", "icerik", "içerik", "kutu", "olcu", "ölçü", "ozellik", "özellik"),
         fix="Teknik özellikleri madde madde ve eksiksiz göster.",
     ),
+    IssueRule(
+        key="price",
+        label="Fiyat algisi problemi",
+        words=("pahali", "pahalı", "fiyat", "eder", "ucuz", "kampanya"),
+        fix="Fiyat algısını güçlendirmek için ürün değerini açıklayan kısa bir bölüm ekle.",
+    ),
+    IssueRule(
+        key="shipping",
+        label="Kargo veya teslimat problemi",
+        words=("kargo", "gecikti", "geç", "teslimat", "paket", "hasarlı"),
+        fix="Kargo süresi, paketleme ve teslimat beklentisini ürün sayfasında netleştir.",
+    ),
+    IssueRule(
+        key="trust",
+        label="Güven problemi",
+        words=("orijinal", "sahte", "güven", "garanti", "iade", "sertifika"),
+        fix="Garanti, iade koşulları ve orijinallik bilgisini görünür hale getir.",
+    ),
 )
 
 

@@ -97,6 +97,42 @@ const _translations = <String, Map<AppLanguage, String>>{
     AppLanguage.en:
         'Product page quality, return risk, and action priority in one place.',
   },
+  'dashboard.highRiskEyebrow': {
+    AppLanguage.tr: 'Risk listesi',
+    AppLanguage.en: 'Risk list',
+  },
+  'dashboard.highRiskTitle': {
+    AppLanguage.tr: 'High Risk Products',
+    AppLanguage.en: 'High Risk Products',
+  },
+  'dashboard.returnReasonsEyebrow': {
+    AppLanguage.tr: 'İade sinyalleri',
+    AppLanguage.en: 'Return signals',
+  },
+  'dashboard.returnReasonsTitle': {
+    AppLanguage.tr: 'Top Return Reasons',
+    AppLanguage.en: 'Top Return Reasons',
+  },
+  'dashboard.progressEyebrow': {
+    AppLanguage.tr: 'Fix ilerleme',
+    AppLanguage.en: 'Fix progress',
+  },
+  'dashboard.progressTitle': {
+    AppLanguage.tr: 'Fix Center Progress',
+    AppLanguage.en: 'Fix Center Progress',
+  },
+  'dashboard.completedEyebrow': {
+    AppLanguage.tr: 'Tamamlananlar',
+    AppLanguage.en: 'Completed',
+  },
+  'dashboard.completedTitle': {
+    AppLanguage.tr: 'Completed Fixes',
+    AppLanguage.en: 'Completed Fixes',
+  },
+  'dashboard.completedEmpty': {
+    AppLanguage.tr: 'Henüz tamamlanan fix yok.',
+    AppLanguage.en: 'No completed fixes yet.',
+  },
   'products.subtitle': {
     AppLanguage.tr:
         'Her ürün için skor, açık iyileştirme listesi, AI açıklama taslağı ve satın alma öncesi uyarı.',
@@ -126,6 +162,7 @@ const _translations = <String, Map<AppLanguage, String>>{
   },
   'button.done': {AppLanguage.tr: 'Tamamlandı', AppLanguage.en: 'Done'},
   'button.undo': {AppLanguage.tr: 'Geri al', AppLanguage.en: 'Undo'},
+  'button.close': {AppLanguage.tr: 'Kapat', AppLanguage.en: 'Close'},
   'section.priority': {AppLanguage.tr: 'Öncelik', AppLanguage.en: 'Priority'},
   'section.worstProducts': {
     AppLanguage.tr: 'En problemli ürünler',
@@ -216,6 +253,13 @@ const _translations = <String, Map<AppLanguage, String>>{
     AppLanguage.tr: 'Önerilen açıklama ve AI yardımcı notu',
     AppLanguage.en: 'Suggested description and AI assistant note',
   },
+  'product.details': {AppLanguage.tr: 'Detay', AppLanguage.en: 'Details'},
+  'product.beforeAfter': {
+    AppLanguage.tr: 'Before / After açıklama preview',
+    AppLanguage.en: 'Before / After description preview',
+  },
+  'product.before': {AppLanguage.tr: 'Before', AppLanguage.en: 'Before'},
+  'product.after': {AppLanguage.tr: 'After', AppLanguage.en: 'After'},
   'fix.improvements': {
     AppLanguage.tr: 'Net yapılacak iyileştirmeler',
     AppLanguage.en: 'Clear fixes to make',
@@ -241,6 +285,32 @@ const _translations = <String, Map<AppLanguage, String>>{
     AppLanguage.en: 'Pre-purchase mini warning',
   },
   'fix.count': {AppLanguage.tr: 'aksiyon', AppLanguage.en: 'actions'},
+  'fix.boardTitle': {
+    AppLanguage.tr: 'Trello tarzı fix panosu',
+    AppLanguage.en: 'Trello-style fix board',
+  },
+  'fix.open': {AppLanguage.tr: 'Open Fixes', AppLanguage.en: 'Open Fixes'},
+  'fix.inProgress': {
+    AppLanguage.tr: 'In Progress',
+    AppLanguage.en: 'In Progress',
+  },
+  'fix.completed': {AppLanguage.tr: 'Completed', AppLanguage.en: 'Completed'},
+  'fix.openEmpty': {
+    AppLanguage.tr: 'Açık fix kalmadı.',
+    AppLanguage.en: 'No open fixes left.',
+  },
+  'fix.inProgressEmpty': {
+    AppLanguage.tr: 'Devam eden fix yok.',
+    AppLanguage.en: 'No fixes in progress.',
+  },
+  'fix.completedEmpty': {
+    AppLanguage.tr: 'Tamamlanan fix yok.',
+    AppLanguage.en: 'No completed fixes.',
+  },
+  'fix.moveInProgress': {
+    AppLanguage.tr: 'Başlat',
+    AppLanguage.en: 'Start',
+  },
   'risk.low': {AppLanguage.tr: 'Düşük risk', AppLanguage.en: 'Low risk'},
   'risk.medium': {AppLanguage.tr: 'Orta risk', AppLanguage.en: 'Medium risk'},
   'risk.high': {AppLanguage.tr: 'Yüksek risk', AppLanguage.en: 'High risk'},
@@ -250,6 +320,16 @@ const _translations = <String, Map<AppLanguage, String>>{
     AppLanguage.en: 'Cart to purchase',
   },
   'chip.photo': {AppLanguage.tr: 'Fotoğraf', AppLanguage.en: 'Photo'},
+  'funnel.views': {AppLanguage.tr: 'Görüntülenme', AppLanguage.en: 'Views'},
+  'funnel.carts': {
+    AppLanguage.tr: 'Sepete ekleme',
+    AppLanguage.en: 'Add to cart',
+  },
+  'funnel.purchases': {
+    AppLanguage.tr: 'Satın alma',
+    AppLanguage.en: 'Purchases',
+  },
+  'funnel.returns': {AppLanguage.tr: 'İade', AppLanguage.en: 'Returns'},
   'button.cancel': {AppLanguage.tr: 'Vazgeç', AppLanguage.en: 'Cancel'},
   'button.analyze': {AppLanguage.tr: 'Analiz et', AppLanguage.en: 'Analyze'},
   'csv.help': {
@@ -341,6 +421,8 @@ class _ProductFixShellState extends State<ProductFixShell> {
   final List<RawProduct> rawProducts = [...sampleProducts];
   final Set<String> completedFixIds = {};
   final Set<String> completedFixKeys = {};
+  final Set<String> inProgressFixIds = {};
+  final Set<String> inProgressFixKeys = {};
 
   List<ProductInsight> get products {
     return rawProducts.map(analyzeProduct).toList()
@@ -360,8 +442,14 @@ class _ProductFixShellState extends State<ProductFixShell> {
     final summary = Summary.fromProducts(insights);
     final themes = themeCounts(insights);
     final actions = buildFixActions(insights);
-    final openActions =
-        actions.where((action) => !_isFixCompleted(action)).toList();
+    final completedActions = actions.where(_isFixCompleted).toList();
+    final inProgressActions = actions
+        .where((action) => _isFixInProgress(action) && !_isFixCompleted(action))
+        .toList();
+    final openActions = actions
+        .where(
+            (action) => !_isFixCompleted(action) && !_isFixInProgress(action))
+        .toList();
 
     final palette = AppPalette(darkMode);
     return AppScope(
@@ -394,6 +482,9 @@ class _ProductFixShellState extends State<ProductFixShell> {
                       products: insights,
                       summary: summary,
                       themes: themes,
+                      openActions: openActions,
+                      inProgressActions: inProgressActions,
+                      completedActions: completedActions,
                       actions: openActions,
                       completedFixIds: completedFixIds,
                       completedFixKeys: completedFixKeys,
@@ -407,6 +498,7 @@ class _ProductFixShellState extends State<ProductFixShell> {
                         });
                       },
                       onToggleFix: _toggleFix,
+                      onStartFix: _startFix,
                     ),
                   ),
                 ),
@@ -497,6 +589,8 @@ class _ProductFixShellState extends State<ProductFixShell> {
       } else {
         completedFixIds.add(action.id);
         completedFixKeys.add(action.matchKey);
+        inProgressFixIds.remove(action.id);
+        inProgressFixKeys.remove(action.matchKey);
       }
     });
 
@@ -507,6 +601,23 @@ class _ProductFixShellState extends State<ProductFixShell> {
   bool _isFixCompleted(FixAction action) {
     return completedFixIds.contains(action.id) ||
         completedFixKeys.contains(action.matchKey);
+  }
+
+  void _startFix(FixAction action) {
+    setState(() {
+      if (_isFixInProgress(action)) {
+        inProgressFixIds.remove(action.id);
+        inProgressFixKeys.remove(action.matchKey);
+      } else {
+        inProgressFixIds.add(action.id);
+        inProgressFixKeys.add(action.matchKey);
+      }
+    });
+  }
+
+  bool _isFixInProgress(FixAction action) {
+    return inProgressFixIds.contains(action.id) ||
+        inProgressFixKeys.contains(action.matchKey);
   }
 
   Future<void> _loadCompletedFixes() async {
@@ -595,6 +706,9 @@ class _SectionBody extends StatelessWidget {
     required this.products,
     required this.summary,
     required this.themes,
+    required this.openActions,
+    required this.inProgressActions,
+    required this.completedActions,
     required this.actions,
     required this.completedFixIds,
     required this.completedFixKeys,
@@ -603,12 +717,16 @@ class _SectionBody extends StatelessWidget {
     required this.onPasteCsv,
     required this.onActionTap,
     required this.onToggleFix,
+    required this.onStartFix,
   });
 
   final AppSection selectedSection;
   final List<ProductInsight> products;
   final Summary summary;
   final List<ThemeCount> themes;
+  final List<FixAction> openActions;
+  final List<FixAction> inProgressActions;
+  final List<FixAction> completedActions;
   final List<FixAction> actions;
   final Set<String> completedFixIds;
   final Set<String> completedFixKeys;
@@ -617,6 +735,7 @@ class _SectionBody extends StatelessWidget {
   final VoidCallback onPasteCsv;
   final ValueChanged<FixAction> onActionTap;
   final ValueChanged<FixAction> onToggleFix;
+  final ValueChanged<FixAction> onStartFix;
 
   @override
   Widget build(BuildContext context) {
@@ -625,6 +744,9 @@ class _SectionBody extends StatelessWidget {
           products: products,
           summary: summary,
           themes: themes,
+          openActions: openActions,
+          inProgressActions: inProgressActions,
+          completedActions: completedActions,
           onAddManual: onAddManual,
           onPasteCsv: onPasteCsv,
         ),
@@ -640,8 +762,11 @@ class _SectionBody extends StatelessWidget {
       AppSection.returns => ReturnsView(products: products, themes: themes),
       AppSection.fixCenter => FixCenterView(
           actions: actions,
+          inProgressActions: inProgressActions,
+          completedActions: completedActions,
           onActionTap: onActionTap,
           onToggleFix: onToggleFix,
+          onStartFix: onStartFix,
         ),
     };
 
@@ -655,6 +780,9 @@ class DashboardView extends StatelessWidget {
     required this.products,
     required this.summary,
     required this.themes,
+    required this.openActions,
+    required this.inProgressActions,
+    required this.completedActions,
     required this.onAddManual,
     required this.onPasteCsv,
   });
@@ -662,6 +790,9 @@ class DashboardView extends StatelessWidget {
   final List<ProductInsight> products;
   final Summary summary;
   final List<ThemeCount> themes;
+  final List<FixAction> openActions;
+  final List<FixAction> inProgressActions;
+  final List<FixAction> completedActions;
   final VoidCallback onAddManual;
   final VoidCallback onPasteCsv;
 
@@ -686,6 +817,14 @@ class DashboardView extends StatelessWidget {
       ],
       children: [
         _MetricGrid(summary: summary),
+        const SizedBox(height: 16),
+        _DashboardDemoGrid(
+          products: products,
+          themes: themes,
+          openActions: openActions,
+          inProgressActions: inProgressActions,
+          completedActions: completedActions,
+        ),
         const SizedBox(height: 16),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -900,43 +1039,153 @@ class FixCenterView extends StatelessWidget {
   const FixCenterView({
     super.key,
     required this.actions,
+    required this.inProgressActions,
+    required this.completedActions,
     required this.onActionTap,
     required this.onToggleFix,
+    required this.onStartFix,
   });
 
   final List<FixAction> actions;
+  final List<FixAction> inProgressActions;
+  final List<FixAction> completedActions;
   final ValueChanged<FixAction> onActionTap;
   final ValueChanged<FixAction> onToggleFix;
+  final ValueChanged<FixAction> onStartFix;
 
   @override
   Widget build(BuildContext context) {
+    final total =
+        actions.length + inProgressActions.length + completedActions.length;
     return _Page(
       title: 'Fix Center',
       subtitle: tr(context, 'fix.subtitle'),
       children: [
         _PanelSection(
           eyebrow: tr(context, 'section.reasonable'),
-          title: tr(context, 'section.today'),
-          trailing: _Pill('${actions.length} ${tr(context, 'fix.count')}',
+          title: tr(context, 'fix.boardTitle'),
+          trailing: _Pill('$total ${tr(context, 'fix.count')}',
               color: AppColors.blue),
-          child: actions.isEmpty
+          child: total == 0
               ? _EmptyState(
                   icon: Icons.verified_outlined,
                   title: tr(context, 'empty.doneTitle'),
                   message: tr(context, 'empty.doneMessage'),
                 )
-              : Column(
-                  children: [
-                    for (final action in actions)
-                      _FixActionCard(
-                        action: action,
-                        onTap: () => onActionTap(action),
-                        onToggle: () => onToggleFix(action),
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final narrow = constraints.maxWidth < 980;
+                    final columns = [
+                      _FixBoardColumn(
+                        title: tr(context, 'fix.open'),
+                        color: AppColors.blue,
+                        actions: actions,
+                        emptyText: tr(context, 'fix.openEmpty'),
+                        itemBuilder: (action) => _FixActionCard(
+                          action: action,
+                          onTap: () => onActionTap(action),
+                          onStart: () => onStartFix(action),
+                          onToggle: () => onToggleFix(action),
+                        ),
                       ),
-                  ],
+                      _FixBoardColumn(
+                        title: tr(context, 'fix.inProgress'),
+                        color: AppColors.amber,
+                        actions: inProgressActions,
+                        emptyText: tr(context, 'fix.inProgressEmpty'),
+                        itemBuilder: (action) => _FixActionCard(
+                          action: action,
+                          onTap: () => onActionTap(action),
+                          onToggle: () => onToggleFix(action),
+                        ),
+                      ),
+                      _FixBoardColumn(
+                        title: tr(context, 'fix.completed'),
+                        color: AppColors.green,
+                        actions: completedActions,
+                        emptyText: tr(context, 'fix.completedEmpty'),
+                        itemBuilder: (action) => _FixActionCard(
+                          action: action,
+                          onTap: () => onActionTap(action),
+                          onToggle: () => onToggleFix(action),
+                          completed: true,
+                        ),
+                      ),
+                    ];
+
+                    if (narrow) {
+                      return Column(
+                        children: [
+                          for (final column in columns) ...[
+                            column,
+                            const SizedBox(height: 14),
+                          ],
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: columns[0]),
+                        const SizedBox(width: 14),
+                        Expanded(child: columns[1]),
+                        const SizedBox(width: 14),
+                        Expanded(child: columns[2]),
+                      ],
+                    );
+                  },
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _FixBoardColumn extends StatelessWidget {
+  const _FixBoardColumn({
+    required this.title,
+    required this.color,
+    required this.actions,
+    required this.emptyText,
+    required this.itemBuilder,
+  });
+
+  final String title;
+  final Color color;
+  final List<FixAction> actions;
+  final String emptyText;
+  final Widget Function(FixAction action) itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        border: Border.all(color: palette.line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _Pill('${actions.length}', color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (actions.isEmpty)
+            Text(emptyText, style: TextStyle(color: palette.muted)),
+          for (final action in actions) itemBuilder(action),
+        ],
+      ),
     );
   }
 }
@@ -1118,7 +1367,7 @@ class _MetricGrid extends StatelessWidget {
       ),
       (
         tr(context, 'metric.biggestLoss'),
-        summary.topProblem ?? '-',
+        translateIssueLabelText(context, summary.topProblem),
         Icons.insights_outlined
       ),
     ];
@@ -1171,6 +1420,144 @@ class _MetricGrid extends StatelessWidget {
               ),
             );
           },
+        );
+      },
+    );
+  }
+}
+
+class _DashboardDemoGrid extends StatelessWidget {
+  const _DashboardDemoGrid({
+    required this.products,
+    required this.themes,
+    required this.openActions,
+    required this.inProgressActions,
+    required this.completedActions,
+  });
+
+  final List<ProductInsight> products;
+  final List<ThemeCount> themes;
+  final List<FixAction> openActions;
+  final List<FixAction> inProgressActions;
+  final List<FixAction> completedActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final highRisk = products
+        .where((product) => product.risk == RiskLevel.high)
+        .take(3)
+        .toList();
+    final totalFixes =
+        openActions.length + inProgressActions.length + completedActions.length;
+    final completedPercent = totalFixes == 0
+        ? 0
+        : ((completedActions.length / totalFixes) * 100).round();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 1040;
+        final cards = [
+          _PanelSection(
+            eyebrow: tr(context, 'dashboard.highRiskEyebrow'),
+            title: tr(context, 'dashboard.highRiskTitle'),
+            child: Column(
+              children: [
+                for (final product in highRisk)
+                  _MiniProductRow(product: product, showCategory: true),
+              ],
+            ),
+          ),
+          _PanelSection(
+            eyebrow: tr(context, 'dashboard.returnReasonsEyebrow'),
+            title: tr(context, 'dashboard.returnReasonsTitle'),
+            child: Column(
+              children: [
+                for (final theme in themes.take(4))
+                  _HorizontalBar(
+                    label: translateIssueLabel(context, theme.rule),
+                    value: theme.count,
+                    max: products.length,
+                    color: issueColor(theme.rule.key),
+                  ),
+              ],
+            ),
+          ),
+          _PanelSection(
+            eyebrow: tr(context, 'dashboard.progressEyebrow'),
+            title: tr(context, 'dashboard.progressTitle'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _HorizontalBar(
+                  label: tr(context, 'fix.completed'),
+                  value: completedPercent,
+                  max: 100,
+                  suffix: '%',
+                  color: AppColors.green,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _Pill('${openActions.length} ${tr(context, 'fix.open')}',
+                        color: AppColors.blue),
+                    _Pill(
+                        '${inProgressActions.length} ${tr(context, 'fix.inProgress')}',
+                        color: AppColors.amber),
+                    _Pill(
+                        '${completedActions.length} ${tr(context, 'fix.completed')}',
+                        color: AppColors.green),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          _PanelSection(
+            eyebrow: tr(context, 'dashboard.completedEyebrow'),
+            title: tr(context, 'dashboard.completedTitle'),
+            child: completedActions.isEmpty
+                ? Text(
+                    tr(context, 'dashboard.completedEmpty'),
+                    style: TextStyle(color: AppScope.of(context).colors.muted),
+                  )
+                : Column(
+                    children: [
+                      for (final action in completedActions.take(3))
+                        _CompactFixRow(action: action),
+                    ],
+                  ),
+          ),
+        ];
+
+        if (narrow) {
+          return Column(
+            children: [
+              for (final card in cards) ...[card, const SizedBox(height: 16)],
+            ],
+          );
+        }
+
+        return Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: cards[0]),
+                const SizedBox(width: 16),
+                Expanded(child: cards[1]),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: cards[2]),
+                const SizedBox(width: 16),
+                Expanded(child: cards[3]),
+              ],
+            ),
+          ],
         );
       },
     );
@@ -1276,6 +1663,15 @@ class _ProductCard extends StatelessWidget {
                         '${tr(context, 'product.returnRate')}: ${percent(product.returnRate)}'),
                     _Chip(
                         '${tr(context, 'chip.photo')}: ${product.photoCount}'),
+                    OutlinedButton.icon(
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (context) =>
+                            _ProductDetailDialog(product: product),
+                      ),
+                      icon: const Icon(Icons.open_in_new, size: 17),
+                      label: Text(tr(context, 'product.details')),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -1473,16 +1869,175 @@ class _AiSuggestion extends StatelessWidget {
   }
 }
 
+class _ProductDetailDialog extends StatelessWidget {
+  const _ProductDetailDialog({required this.product});
+
+  final ProductInsight product;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return AlertDialog(
+      title: Row(
+        children: [
+          Expanded(child: Text(product.name)),
+          _RiskPill(risk: product.risk),
+        ],
+      ),
+      content: SizedBox(
+        width: 860,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _Chip('SKU: ${product.sku}'),
+                  _Chip('${tr(context, 'metric.avgScore')}: ${product.score}'),
+                  _Chip(
+                      '${tr(context, 'product.returnRate')}: ${percent(product.returnRate)}'),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(tr(context, 'product.beforeAfter'),
+                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 720;
+                  final before = _DescriptionPreview(
+                    title: tr(context, 'product.before'),
+                    text: product.raw.description,
+                    color: AppColors.red,
+                  );
+                  final after = _DescriptionPreview(
+                    title: tr(context, 'product.after'),
+                    text: product.suggestedDescription,
+                    color: AppColors.green,
+                  );
+                  if (narrow) {
+                    return Column(
+                      children: [before, const SizedBox(height: 12), after],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: before),
+                      const SizedBox(width: 12),
+                      Expanded(child: after),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              Text(tr(context, 'fix.improvements'),
+                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 8),
+              for (final action in product.fixActions.take(5))
+                _CompactFixRow(action: action),
+              const SizedBox(height: 12),
+              Text(product.buyerWarning,
+                  style: TextStyle(color: palette.muted, height: 1.45)),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(tr(context, 'button.close')),
+        ),
+      ],
+    );
+  }
+}
+
+class _DescriptionPreview extends StatelessWidget {
+  const _DescriptionPreview({
+    required this.title,
+    required this.text,
+    required this.color,
+  });
+
+  final String title;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(text.isEmpty ? '-' : text,
+              style: TextStyle(color: palette.text, height: 1.5)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactFixRow extends StatelessWidget {
+  const _CompactFixRow({required this.action});
+
+  final FixAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        border: Border.all(color: palette.line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.task_alt, size: 18, color: riskColor(action.risk)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              translateFixText(context, action.title),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FixActionCard extends StatelessWidget {
   const _FixActionCard({
     required this.action,
     required this.onTap,
     required this.onToggle,
+    this.onStart,
+    this.completed = false,
   });
 
   final FixAction action;
   final VoidCallback onTap;
   final VoidCallback onToggle;
+  final VoidCallback? onStart;
+  final bool completed;
 
   @override
   Widget build(BuildContext context) {
@@ -1520,10 +2075,27 @@ class _FixActionCard extends StatelessWidget {
                             color: riskColor(action.risk),
                             fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: onToggle,
-                      icon: const Icon(Icons.check_circle_outline, size: 18),
-                      label: Text(tr(context, 'button.done')),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        if (onStart != null)
+                          TextButton.icon(
+                            onPressed: onStart,
+                            icon: const Icon(Icons.play_arrow, size: 18),
+                            label: Text(tr(context, 'fix.moveInProgress')),
+                          ),
+                        TextButton.icon(
+                          onPressed: onToggle,
+                          icon: Icon(
+                            completed ? Icons.undo : Icons.check_circle_outline,
+                            size: 18,
+                          ),
+                          label: Text(completed
+                              ? tr(context, 'button.undo')
+                              : tr(context, 'button.done')),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -2040,11 +2612,12 @@ class _MiniProductRow extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   showCategory
-                      ? '${product.raw.category} • ${product.priorityImprovements.first}'
-                      : product.priorityImprovements.first,
+                      ? '${translateCategory(context, product.raw.category)} • ${translateFixText(context, product.priorityImprovements.first)}'
+                      : translateFixText(
+                          context, product.priorityImprovements.first),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.muted, height: 1.35),
+                  style: TextStyle(color: palette.muted, height: 1.35),
                 ),
               ],
             ),
@@ -2123,10 +2696,10 @@ class _FunnelChart extends StatelessWidget {
     final max =
         [views, carts, purchases, returns].reduce((a, b) => a > b ? a : b);
     final rows = [
-      ('Görüntüleme', views, AppColors.blue),
-      ('Sepete ekleme', carts, AppColors.green),
-      ('Satın alma', purchases, AppColors.amber),
-      ('İade', returns, AppColors.red),
+      (tr(context, 'funnel.views'), views, AppColors.blue),
+      (tr(context, 'funnel.carts'), carts, AppColors.green),
+      (tr(context, 'funnel.purchases'), purchases, AppColors.amber),
+      (tr(context, 'funnel.returns'), returns, AppColors.red),
     ];
 
     return Column(
@@ -2159,7 +2732,7 @@ class _CategoryRiskChart extends StatelessWidget {
       children: [
         for (final entry in categories.entries)
           _HorizontalBar(
-            label: entry.key,
+            label: translateCategory(context, entry.key),
             value: (entry.value.fold<double>(
                         0, (sum, product) => sum + product.returnRate) /
                     entry.value.length *
@@ -2706,7 +3279,40 @@ String translateIssueLabel(BuildContext context, IssueRule rule) {
     'color' => 'Visual expectation gap',
     'quality' => 'Quality perception',
     'technical' => 'Missing technical info',
+    'price' => 'Price perception problem',
+    'shipping' => 'Shipping or delivery problem',
+    'trust' => 'Trust problem',
     _ => rule.label,
+  };
+}
+
+String translateIssueLabelText(BuildContext context, String? label) {
+  if (label == null || label.isEmpty) return '-';
+  if (AppScope.of(context).language == AppLanguage.tr) return label;
+  final normalized = normalizeFixTitle(label);
+  return switch (normalized) {
+    'beden-kalip-belirsizligi' => 'Unclear size/fit',
+    'gorsel-beklenti-farki' => 'Visual expectation gap',
+    'kalite-algisi' => 'Quality perception',
+    'teknik-bilgi-eksikligi' => 'Missing technical info',
+    'fiyat-algisi-problemi' => 'Price perception problem',
+    'kargo-veya-teslimat-problemi' => 'Shipping or delivery problem',
+    'guven-problemi' => 'Trust problem',
+    _ => label,
+  };
+}
+
+String translateCategory(BuildContext context, String category) {
+  if (AppScope.of(context).language == AppLanguage.tr) return category;
+  final normalized = normalizeFixTitle(category);
+  return switch (normalized) {
+    'ayakkabi' => 'Shoes',
+    'giyim' => 'Apparel',
+    'elektronik' => 'Electronics',
+    'aksesuar' => 'Accessories',
+    'kozmetik' => 'Cosmetics',
+    'genel' => 'General',
+    _ => category,
   };
 }
 
@@ -2719,6 +3325,12 @@ const _fixTextTranslations = {
       'Clearly add material, texture, and usage feel to the description.',
   'Teknik özellikleri madde madde ve eksiksiz göster.':
       'Show technical specs as a complete bullet list.',
+  'Fiyat algısını güçlendirmek için ürün değerini açıklayan kısa bir bölüm ekle.':
+      'Add a short section that explains product value to strengthen price perception.',
+  'Kargo süresi, paketleme ve teslimat beklentisini ürün sayfasında netleştir.':
+      'Clarify shipping time, packaging, and delivery expectations on the product page.',
+  'Garanti, iade koşulları ve orijinallik bilgisini görünür hale getir.':
+      'Make warranty, return policy, and authenticity information visible.',
   'Açıklamaya kullanım senaryosu, malzeme ve beklenti bilgisini 3 net cümleyle ekle.':
       'Add use case, material, and expectation details in three clear sentences.',
   'Beden tablosunu ürün fiyatının hemen altına sabitle.':
@@ -2883,6 +3495,9 @@ Color issueColor(String key) {
     'color' => AppColors.blue,
     'quality' => AppColors.amber,
     'technical' => AppColors.green,
+    'price' => AppColors.purple,
+    'shipping' => AppColors.cyan,
+    'trust' => AppColors.ink,
     _ => AppColors.muted,
   };
 }
@@ -2901,6 +3516,9 @@ class AppColors {
   static const red = Color(0xFFB83D3D);
   static const blue = Color(0xFF2F64A3);
   static const blueSoft = Color(0xFFC9DDF4);
+  static const purple = Color(0xFF7450A8);
+  static const cyan = Color(0xFF247C88);
+  static const ink = Color(0xFF4F5C68);
 }
 
 const issueRules = [
@@ -2927,6 +3545,26 @@ const issueRules = [
     label: 'Teknik bilgi eksikliği',
     words: ['bağlantı', 'pil', 'içerik', 'kutu', 'ölçü', 'özellik'],
     fix: 'Teknik özellikleri madde madde ve eksiksiz göster.',
+  ),
+  IssueRule(
+    key: 'price',
+    label: 'Fiyat algısı problemi',
+    words: ['pahali', 'pahalı', 'fiyat', 'eder', 'ucuz', 'kampanya'],
+    fix:
+        'Fiyat algısını güçlendirmek için ürün değerini açıklayan kısa bir bölüm ekle.',
+  ),
+  IssueRule(
+    key: 'shipping',
+    label: 'Kargo veya teslimat problemi',
+    words: ['kargo', 'gecikti', 'geç', 'teslimat', 'paket', 'hasarlı'],
+    fix:
+        'Kargo süresi, paketleme ve teslimat beklentisini ürün sayfasında netleştir.',
+  ),
+  IssueRule(
+    key: 'trust',
+    label: 'Güven problemi',
+    words: ['orijinal', 'sahte', 'güven', 'garanti', 'iade', 'sertifika'],
+    fix: 'Garanti, iade koşulları ve orijinallik bilgisini görünür hale getir.',
   ),
 ];
 

@@ -15,7 +15,7 @@ The app turns raw product CSV data into:
 - Product risk scores
 - Return reason analysis
 - Missing product page signal detection
-- AI-style description and buyer warning suggestions
+- Rule-based analysis and AI-ready product fix suggestions
 - A Fix Center where actions can be marked as completed
 - Tenant-specific persistent databases for SaaS customers
 
@@ -44,19 +44,30 @@ The app turns raw product CSV data into:
 ## Features
 
 - Dashboard for conversion, return, and risk signals
-- Products view with per-product improvement recommendations
+- Dashboard demo panels for High Risk Products, Top Return Reasons, Fix Center Progress, and Completed Fixes
+- Products view with per-product improvement recommendations, risk badges, and detail previews
+- Product detail modal with before/after description preview
 - Return analysis with category and theme breakdowns
-- Fix Center for prioritized actions
+- Trello-style Fix Center with Open Fixes, In Progress, and Completed columns
 - Completed fix tracking that survives page reloads
 - CSV paste input and manual product entry
 - Turkish / English UI language switch
 - Light / dark background mode
 - Tenant-specific SQLite databases under `backend/data/tenants/`
+- Two backend analysis modes: `rule_based` and `llm_powered`
 
 ## Project Layout
 
 - `frontend/`: Flutter app
 - `backend/`: Python FastAPI analysis service
+- `backend/productfix/api.py`: thin API routing layer
+- `backend/productfix/analysis.py`: rule-based analysis engine
+- `backend/productfix/ai_suggestions.py`: LLM-ready suggestion layer
+- `backend/productfix/schemas.py`: API request and mode schemas
+- `backend/productfix/services/product_service.py`: CSV import and tenant product workflows
+- `backend/productfix/services/analysis_service.py`: analysis mode orchestration
+- `backend/productfix/services/fix_service.py`: completed fix workflows
+- `backend/productfix/storage.py`: SQLite persistence layer
 - `backend/data/sample-products.csv`: demo CSV file
 
 No virtualenv is created by this repo. Use your own conda environment.
@@ -120,6 +131,21 @@ Useful endpoints:
 - `POST /tenants/{tenant_id}/fixes/{fix_id}/complete`: mark a fix as completed or reopen it with `{ "completed": false }`.
 - `GET /tenants/{tenant_id}/fixes/completed`: list completed fixes.
 
+## Analysis Modes
+
+ProductFix AI supports two backend analysis modes:
+
+- `rule_based`: deterministic scoring based on conversion, return rate, issue keywords, and missing product page signals.
+- `llm_powered`: keeps the rule-based score, then attaches structured AI-ready suggestions through `ai_suggestions.py`.
+
+The current `llm_powered` mode uses a local stub so the project runs without external API keys. Later, `generate_ai_fix(product)` can call OpenAI or a local model and keep the same response shape.
+
+Example:
+
+```powershell
+curl.exe "http://127.0.0.1:8000/tenants/demo-store/analysis?analysis_mode=llm_powered"
+```
+
 ## API Smoke Test
 
 After starting the backend, upload the sample CSV for a demo tenant:
@@ -127,4 +153,13 @@ After starting the backend, upload the sample CSV for a demo tenant:
 ```powershell
 curl.exe -X POST "http://127.0.0.1:8000/tenants/demo-store/products/import-csv" `
   -F "file=@backend/data/sample-products.csv"
+```
+
+## Tests
+
+Backend tests cover the rule-based analysis engine, tenant storage, and FastAPI endpoints.
+
+```powershell
+cd backend
+python -m pytest
 ```
