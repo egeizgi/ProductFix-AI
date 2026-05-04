@@ -23,23 +23,19 @@ The app turns raw product CSV data into:
 
 ### Dashboard
 
-![Dashboard screenshot](docs/screenshots/dashboard.png)
+![Dashboard screenshot](docs/screenshots/dashboard_sample.png)
 
 ### Product Risk List
 
-![Product risk list screenshot](docs/screenshots/product-risk-list.png)
+![Product risk list screenshot](docs/screenshots/prodcut_risk.png)
 
 ### Fix Center
 
-![Fix Center screenshot](docs/screenshots/fix-center.png)
+![Fix Center screenshot](docs/screenshots/fix_center.png)
 
 ## Demo Flow
 
-1. Sample CSV upload
-2. Product risk scores are generated
-3. Return reasons are analyzed
-4. Fix Center suggests actions
-5. User marks fixes as completed
+![Demo Flow Video]("docs/Video Project 1.mp4")
 
 ## Features
 
