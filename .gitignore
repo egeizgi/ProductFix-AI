@@ -8,3 +8,4 @@ build/
 frontend/.flutter-plugins
 frontend/.flutter-plugins-dependencies
 frontend/pubspec.lock
+frontend/flutter-web*.log

@@ -1,17 +1,44 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:typed_data';
 
+import 'package:excel/excel.dart' as xls;
 import 'package:flutter/material.dart';
 
 const apiBaseUrl = 'http://127.0.0.1:8000';
 
-String get appTenantId {
+String get initialTenantId {
   final tenant = Uri.base.queryParameters['tenant']?.trim();
-  return tenant == null || tenant.isEmpty ? 'acme-store' : tenant;
+  return tenant == null || tenant.isEmpty ? 'demo-store' : tenant;
 }
 
-String get completedFixStorageKey => 'productfix.completedFixes.$appTenantId';
+AppSection initialSection() => sectionFromPath(Uri.base.path);
+
+AppSection sectionFromPath(String path) {
+  final normalized = path.toLowerCase().replaceAll(RegExp(r'^/+|/+$'), '');
+  return switch (normalized) {
+    'products' => AppSection.products,
+    'returns' => AppSection.returns,
+    'fix-center' => AppSection.fixCenter,
+    _ => AppSection.dashboard,
+  };
+}
+
+String pathForSection(AppSection section) {
+  return switch (section) {
+    AppSection.dashboard => '/',
+    AppSection.products => '/products',
+    AppSection.returns => '/returns',
+    AppSection.fixCenter => '/fix-center',
+  };
+}
+
+String completedFixStorageKey(String tenantId) =>
+    'productfix.completedFixes.$tenantId';
+
+String productsStorageKey(String tenantId) => 'productfix.products.$tenantId';
+
 const appSettingsStorageKey = 'productfix.uiSettings';
 
 void main() {
@@ -20,20 +47,64 @@ void main() {
 
 enum AppLanguage { tr, en }
 
+class DemoTenant {
+  const DemoTenant({
+    required this.id,
+    required this.labelKey,
+    required this.hintKey,
+  });
+
+  final String id;
+  final String labelKey;
+  final String hintKey;
+
+  String label(BuildContext context) => tr(context, labelKey);
+  String hint(BuildContext context) => tr(context, hintKey);
+}
+
+const demoTenants = [
+  DemoTenant(
+    id: 'demo-store',
+    labelKey: 'tenant.demoStore',
+    hintKey: 'tenant.demoStoreHint',
+  ),
+  DemoTenant(
+    id: 'fashion-store',
+    labelKey: 'tenant.fashionStore',
+    hintKey: 'tenant.fashionStoreHint',
+  ),
+  DemoTenant(
+    id: 'electronics-store',
+    labelKey: 'tenant.electronicsStore',
+    hintKey: 'tenant.electronicsStoreHint',
+  ),
+];
+
+DemoTenant tenantById(String id) {
+  return demoTenants.firstWhere(
+    (tenant) => tenant.id == id,
+    orElse: () => demoTenants.first,
+  );
+}
+
 class AppScope extends InheritedWidget {
   const AppScope({
     super.key,
     required this.language,
     required this.darkMode,
+    required this.tenant,
     required this.onLanguageChanged,
     required this.onDarkModeChanged,
+    required this.onTenantChanged,
     required super.child,
   });
 
   final AppLanguage language;
   final bool darkMode;
+  final DemoTenant tenant;
   final ValueChanged<AppLanguage> onLanguageChanged;
   final ValueChanged<bool> onDarkModeChanged;
+  final ValueChanged<DemoTenant> onTenantChanged;
 
   static AppScope of(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<AppScope>()!;
@@ -47,7 +118,9 @@ class AppScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppScope oldWidget) {
-    return language != oldWidget.language || darkMode != oldWidget.darkMode;
+    return language != oldWidget.language ||
+        darkMode != oldWidget.darkMode ||
+        tenant != oldWidget.tenant;
   }
 }
 
@@ -83,6 +156,52 @@ const _translations = <String, Map<AppLanguage, String>>{
   'settings.background': {
     AppLanguage.tr: 'Koyu arka plan',
     AppLanguage.en: 'Dark background',
+  },
+  'auth.title': {
+    AppLanguage.tr: 'ProductFix AI Demo Login',
+    AppLanguage.en: 'ProductFix AI Demo Login',
+  },
+  'auth.subtitle': {
+    AppLanguage.tr:
+        'MVP demosuna tenant seçerek gir. Her tenant ayrı SQLite alanı gibi çalışır.',
+    AppLanguage.en:
+        'Enter the MVP demo by choosing a tenant. Each tenant behaves like a separate SQLite workspace.',
+  },
+  'auth.button': {
+    AppLanguage.tr: 'Demo login',
+    AppLanguage.en: 'Demo login',
+  },
+  'auth.logout': {
+    AppLanguage.tr: 'Çıkış',
+    AppLanguage.en: 'Logout',
+  },
+  'tenant.label': {
+    AppLanguage.tr: 'Tenant',
+    AppLanguage.en: 'Tenant',
+  },
+  'tenant.demoStore': {
+    AppLanguage.tr: 'Demo Store',
+    AppLanguage.en: 'Demo Store',
+  },
+  'tenant.fashionStore': {
+    AppLanguage.tr: 'Fashion Store',
+    AppLanguage.en: 'Fashion Store',
+  },
+  'tenant.electronicsStore': {
+    AppLanguage.tr: 'Electronics Store',
+    AppLanguage.en: 'Electronics Store',
+  },
+  'tenant.demoStoreHint': {
+    AppLanguage.tr: 'Genel ecommerce demo tenant',
+    AppLanguage.en: 'General ecommerce demo tenant',
+  },
+  'tenant.fashionStoreHint': {
+    AppLanguage.tr: 'Giyim ve beden riski odaklı tenant',
+    AppLanguage.en: 'Tenant focused on apparel and sizing risk',
+  },
+  'tenant.electronicsStoreHint': {
+    AppLanguage.tr: 'Teknik bilgi ve iade sinyalleri odaklı tenant',
+    AppLanguage.en: 'Tenant focused on technical info and return signals',
   },
   'nav.dashboard': {AppLanguage.tr: 'Dashboard', AppLanguage.en: 'Dashboard'},
   'nav.products': {AppLanguage.tr: 'Ürünler', AppLanguage.en: 'Products'},
@@ -151,7 +270,14 @@ const _translations = <String, Map<AppLanguage, String>>{
     AppLanguage.en:
         'Start with the products leaking revenue: high returns, low scores, clear fixes.',
   },
-  'button.csv': {AppLanguage.tr: 'CSV yapıştır', AppLanguage.en: 'Paste CSV'},
+  'button.csv': {
+    AppLanguage.tr: 'CSV / Excel yükle',
+    AppLanguage.en: 'Upload CSV / Excel'
+  },
+  'button.demo': {
+    AppLanguage.tr: 'Demo data ile başla',
+    AppLanguage.en: 'Start with demo data',
+  },
   'button.manual': {
     AppLanguage.tr: 'Manuel ürün',
     AppLanguage.en: 'Manual product'
@@ -260,6 +386,74 @@ const _translations = <String, Map<AppLanguage, String>>{
   },
   'product.before': {AppLanguage.tr: 'Before', AppLanguage.en: 'Before'},
   'product.after': {AppLanguage.tr: 'After', AppLanguage.en: 'After'},
+  'product.riskDiagnosis': {
+    AppLanguage.tr: 'AI risk teşhisi',
+    AppLanguage.en: 'AI risk diagnosis',
+  },
+  'product.riskScore': {
+    AppLanguage.tr: 'Risk Score',
+    AppLanguage.en: 'Risk Score',
+  },
+  'product.mainProblems': {
+    AppLanguage.tr: 'Main Problems',
+    AppLanguage.en: 'Main Problems',
+  },
+  'product.recommendedFixes': {
+    AppLanguage.tr: 'Recommended Fixes',
+    AppLanguage.en: 'Recommended Fixes',
+  },
+  'problem.highReturn': {
+    AppLanguage.tr: 'High return rate',
+    AppLanguage.en: 'High return rate',
+  },
+  'problem.lowAddToCart': {
+    AppLanguage.tr: 'Low add-to-cart rate',
+    AppLanguage.en: 'Low add-to-cart rate',
+  },
+  'problem.lowCartPurchase': {
+    AppLanguage.tr: 'Low cart-to-purchase rate',
+    AppLanguage.en: 'Low cart-to-purchase rate',
+  },
+  'problem.missingSizeChart': {
+    AppLanguage.tr: 'Missing size chart',
+    AppLanguage.en: 'Missing size chart',
+  },
+  'problem.weakDescription': {
+    AppLanguage.tr: 'Product description is weak',
+    AppLanguage.en: 'Product description is weak',
+  },
+  'problem.missingModelPhoto': {
+    AppLanguage.tr: 'Missing model/use photo',
+    AppLanguage.en: 'Missing model/use photo',
+  },
+  'problem.lowPhotoCount': {
+    AppLanguage.tr: 'Low product photo count',
+    AppLanguage.en: 'Low product photo count',
+  },
+  'problem.sizeFeedback': {
+    AppLanguage.tr: 'Common sizing issue in reviews',
+    AppLanguage.en: 'Common sizing issue in reviews',
+  },
+  'problem.expectationGap': {
+    AppLanguage.tr: 'Customer expectation gap',
+    AppLanguage.en: 'Customer expectation gap',
+  },
+  'fix.addSizeChart': {
+    AppLanguage.tr: 'Add size chart',
+    AppLanguage.en: 'Add size chart',
+  },
+  'fix.rewriteDescription': {
+    AppLanguage.tr: 'Rewrite description with material/fit/care details',
+    AppLanguage.en: 'Rewrite description with material/fit/care details',
+  },
+  'fix.addModelPhoto': {
+    AppLanguage.tr: 'Add model photo',
+    AppLanguage.en: 'Add model photo',
+  },
+  'fix.mentionSizingFaq': {
+    AppLanguage.tr: 'Mention common sizing issue in FAQ',
+    AppLanguage.en: 'Mention common sizing issue in FAQ',
+  },
   'fix.improvements': {
     AppLanguage.tr: 'Net yapılacak iyileştirmeler',
     AppLanguage.en: 'Clear fixes to make',
@@ -332,11 +526,57 @@ const _translations = <String, Map<AppLanguage, String>>{
   'funnel.returns': {AppLanguage.tr: 'İade', AppLanguage.en: 'Returns'},
   'button.cancel': {AppLanguage.tr: 'Vazgeç', AppLanguage.en: 'Cancel'},
   'button.analyze': {AppLanguage.tr: 'Analiz et', AppLanguage.en: 'Analyze'},
+  'onboarding.title': {
+    AppLanguage.tr: 'ProductFix AI',
+    AppLanguage.en: 'ProductFix AI',
+  },
+  'onboarding.subtitle': {
+    AppLanguage.tr:
+        'İlk analizi 30 saniyede gör: CSV yükle veya demo ürünlerle başla.',
+    AppLanguage.en:
+        'See the first analysis in 30 seconds: paste a CSV or start with demo products.',
+  },
+  'onboarding.demoTitle': {
+    AppLanguage.tr: 'Demo data',
+    AppLanguage.en: 'Demo data',
+  },
+  'onboarding.demoText': {
+    AppLanguage.tr:
+        'Seçili tenant’a uygun demo CSV otomatik yüklenir ve Dashboard hemen dolar.',
+    AppLanguage.en:
+        'A demo CSV tailored to the selected tenant loads automatically and fills the Dashboard.',
+  },
+  'onboarding.csvTitle': {
+    AppLanguage.tr: 'Kendi CSV’n',
+    AppLanguage.en: 'Your CSV',
+  },
+  'onboarding.csvText': {
+    AppLanguage.tr:
+        'Kolonları kontrol et, CSV’yi yapıştır ve risk skorlarını üret.',
+    AppLanguage.en:
+        'Check the columns, paste the CSV, and generate risk scores.',
+  },
   'csv.help': {
     AppLanguage.tr:
-        'Aynı kolon başlıklarıyla ürünleri yapıştır. Veriler analiz hattına alınır.',
+        'Aynı kolon başlıklarıyla CSV veya XLSX dosyası yükle. Veriler analiz hattına alınır.',
     AppLanguage.en:
-        'Paste products with the same column headers. The data will enter the analysis pipeline.',
+        'Upload a CSV or XLSX file with the same column headers. The data will enter the analysis pipeline.',
+  },
+  'csv.formatTitle': {
+    AppLanguage.tr: 'CSV formatı',
+    AppLanguage.en: 'CSV format',
+  },
+  'csv.formatHelp': {
+    AppLanguage.tr:
+        'Zorunlu kolonlar: sku, name, category, views, add_to_cart, purchases, returns, description, reviews, return_reasons, photo_count, has_size_chart, has_model_photo.',
+    AppLanguage.en:
+        'Required columns: sku, name, category, views, add_to_cart, purchases, returns, description, reviews, return_reasons, photo_count, has_size_chart, has_model_photo.',
+  },
+  'csv.typeHelp': {
+    AppLanguage.tr:
+        'views, add_to_cart, purchases, returns ve photo_count sayısal olmalı. has_size_chart ve has_model_photo true/false olmalı.',
+    AppLanguage.en:
+        'views, add_to_cart, purchases, returns, and photo_count must be numeric. has_size_chart and has_model_photo must be true/false.',
   },
   'csv.error': {
     AppLanguage.tr: 'CSV okunamadı. Başlıkları ve virgülleri kontrol et.',
@@ -414,15 +654,18 @@ class ProductFixShell extends StatefulWidget {
 }
 
 class _ProductFixShellState extends State<ProductFixShell> {
-  AppSection selectedSection = AppSection.dashboard;
+  AppSection selectedSection = initialSection();
   String? highlightedSku;
   AppLanguage language = AppLanguage.tr;
   bool darkMode = false;
-  final List<RawProduct> rawProducts = [...sampleProducts];
+  bool loggedIn = false;
+  DemoTenant tenant = tenantById(initialTenantId);
+  final List<RawProduct> rawProducts = [];
   final Set<String> completedFixIds = {};
   final Set<String> completedFixKeys = {};
   final Set<String> inProgressFixIds = {};
   final Set<String> inProgressFixKeys = {};
+  StreamSubscription<html.PopStateEvent>? _popStateSubscription;
 
   List<ProductInsight> get products {
     return rawProducts.map(analyzeProduct).toList()
@@ -433,7 +676,23 @@ class _ProductFixShellState extends State<ProductFixShell> {
   void initState() {
     super.initState();
     _loadUiSettings();
+    _loadStoredProducts();
+    _syncUrlWithSection(replace: true);
+    _popStateSubscription = html.window.onPopState.listen((_) {
+      final section = sectionFromPath(Uri.base.path);
+      if (section == selectedSection) return;
+      setState(() {
+        selectedSection = section;
+        highlightedSku = null;
+      });
+    });
     _loadCompletedFixes();
+  }
+
+  @override
+  void dispose() {
+    _popStateSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -455,54 +714,68 @@ class _ProductFixShellState extends State<ProductFixShell> {
     return AppScope(
       language: language,
       darkMode: darkMode,
+      tenant: tenant,
       onLanguageChanged: _setLanguage,
       onDarkModeChanged: _setDarkMode,
-      child: Theme(
-        data: _buildTheme(darkMode),
-        child: Scaffold(
-          backgroundColor: palette.page,
-          body: SafeArea(
-            child: Row(
-              children: [
-                _Sidebar(
-                  selectedSection: selectedSection,
-                  onSelected: (section) {
-                    setState(() {
-                      selectedSection = section;
-                      highlightedSku = null;
-                    });
-                  },
-                ),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    child: _SectionBody(
-                      key: ValueKey(selectedSection),
-                      selectedSection: selectedSection,
-                      products: insights,
-                      summary: summary,
-                      themes: themes,
-                      openActions: openActions,
-                      inProgressActions: inProgressActions,
-                      completedActions: completedActions,
-                      actions: openActions,
-                      completedFixIds: completedFixIds,
-                      completedFixKeys: completedFixKeys,
-                      highlightedSku: highlightedSku,
-                      onAddManual: _openManualProductDialog,
-                      onPasteCsv: _openCsvDialog,
-                      onActionTap: (action) {
-                        setState(() {
-                          selectedSection = AppSection.products;
-                          highlightedSku = action.sku;
-                        });
-                      },
-                      onToggleFix: _toggleFix,
-                      onStartFix: _startFix,
+      onTenantChanged: _setTenant,
+      child: Builder(
+        builder: (scopedContext) => Theme(
+          data: _buildTheme(darkMode),
+          child: Scaffold(
+            backgroundColor: palette.page,
+            body: SafeArea(
+              child: loggedIn
+                  ? Row(
+                      children: [
+                        _Sidebar(
+                          selectedSection: selectedSection,
+                          onSelected: _selectSection,
+                          onLogout: _logout,
+                        ),
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 180),
+                            child: rawProducts.isEmpty
+                                ? _OnboardingView(
+                                    key: const ValueKey('onboarding'),
+                                    onUseDemo: _loadDemoProducts,
+                                    onPasteCsv: () =>
+                                        _openCsvDialog(scopedContext),
+                                  )
+                                : _SectionBody(
+                                    key: ValueKey(selectedSection),
+                                    selectedSection: selectedSection,
+                                    products: insights,
+                                    summary: summary,
+                                    themes: themes,
+                                    openActions: openActions,
+                                    inProgressActions: inProgressActions,
+                                    completedActions: completedActions,
+                                    actions: openActions,
+                                    completedFixIds: completedFixIds,
+                                    completedFixKeys: completedFixKeys,
+                                    highlightedSku: highlightedSku,
+                                    onAddManual: () =>
+                                        _openManualProductDialog(scopedContext),
+                                    onPasteCsv: () =>
+                                        _openCsvDialog(scopedContext),
+                                    onActionTap: (action) {
+                                      _selectSection(AppSection.products);
+                                      setState(
+                                          () => highlightedSku = action.sku);
+                                    },
+                                    onToggleFix: _toggleFix,
+                                    onStartFix: _startFix,
+                                  ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : _DemoLoginView(
+                      selectedTenant: tenant,
+                      onTenantChanged: _setTenant,
+                      onLogin: _login,
                     ),
-                  ),
-                ),
-              ],
             ),
           ),
         ),
@@ -518,6 +791,8 @@ class _ProductFixShellState extends State<ProductFixShell> {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       language = decoded['language'] == 'en' ? AppLanguage.en : AppLanguage.tr;
       darkMode = decoded['darkMode'] == true;
+      loggedIn = decoded['loggedIn'] == true;
+      tenant = tenantById('${decoded['tenantId'] ?? initialTenantId}');
     } catch (_) {
       html.window.localStorage.remove(appSettingsStorageKey);
     }
@@ -533,17 +808,105 @@ class _ProductFixShellState extends State<ProductFixShell> {
     _saveUiSettings();
   }
 
+  void _selectSection(AppSection section, {bool replace = false}) {
+    if (selectedSection == section && highlightedSku == null) return;
+    setState(() {
+      selectedSection = section;
+      highlightedSku = null;
+    });
+    _syncUrlWithSection(replace: replace);
+  }
+
+  void _syncUrlWithSection({bool replace = false}) {
+    final uri = Uri.base.replace(path: pathForSection(selectedSection));
+    if (replace) {
+      html.window.history.replaceState(null, '', uri.toString());
+    } else {
+      html.window.history.pushState(null, '', uri.toString());
+    }
+  }
+
+  void _setTenant(DemoTenant value) {
+    if (tenant.id == value.id) return;
+    setState(() {
+      tenant = value;
+      rawProducts.clear();
+      completedFixIds.clear();
+      completedFixKeys.clear();
+      inProgressFixIds.clear();
+      inProgressFixKeys.clear();
+      selectedSection = AppSection.dashboard;
+      highlightedSku = null;
+    });
+    _saveUiSettings();
+    _loadStoredProducts();
+    _syncUrlWithSection();
+    _loadCompletedFixes();
+  }
+
+  void _login() {
+    setState(() => loggedIn = true);
+    _saveUiSettings();
+    _syncUrlWithSection(replace: true);
+    _loadCompletedFixes();
+  }
+
+  void _logout() {
+    setState(() {
+      loggedIn = false;
+      rawProducts.clear();
+      completedFixIds.clear();
+      completedFixKeys.clear();
+      inProgressFixIds.clear();
+      inProgressFixKeys.clear();
+      selectedSection = AppSection.dashboard;
+      highlightedSku = null;
+    });
+    _saveUiSettings();
+    _saveStoredProducts();
+    _syncUrlWithSection();
+  }
+
   void _saveUiSettings() {
     html.window.localStorage[appSettingsStorageKey] = jsonEncode({
       'language': language.name,
       'darkMode': darkMode,
+      'loggedIn': loggedIn,
+      'tenantId': tenant.id,
     });
   }
 
-  Future<void> _openManualProductDialog() async {
+  void _loadStoredProducts() {
+    final raw = html.window.localStorage[productsStorageKey(tenant.id)];
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      setState(() {
+        rawProducts
+          ..clear()
+          ..addAll(decoded.map(
+            (item) => RawProduct.fromJson(item as Map<String, dynamic>),
+          ));
+      });
+    } catch (_) {
+      html.window.localStorage.remove(productsStorageKey(tenant.id));
+    }
+  }
+
+  void _saveStoredProducts() {
+    if (rawProducts.isEmpty) {
+      html.window.localStorage.remove(productsStorageKey(tenant.id));
+      return;
+    }
+    html.window.localStorage[productsStorageKey(tenant.id)] =
+        jsonEncode(rawProducts.map((product) => product.toJson()).toList());
+  }
+
+  Future<void> _openManualProductDialog(BuildContext dialogContext) async {
     final product = await showDialog<RawProduct>(
-      context: context,
-      builder: (context) => const _ManualProductDialog(),
+      context: dialogContext,
+      builder: (context) => _dialogScope(const _ManualProductDialog()),
     );
 
     if (product == null) return;
@@ -553,10 +916,12 @@ class _ProductFixShellState extends State<ProductFixShell> {
       selectedSection = AppSection.products;
       highlightedSku = product.sku;
     });
+    _saveStoredProducts();
+    _syncUrlWithSection();
 
-    if (!mounted) return;
+    if (!mounted || !dialogContext.mounted) return;
     final csvLine = productToCsvLine(product);
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(dialogContext).showSnackBar(
       SnackBar(
         content:
             Text('Ürün CSV satırına dönüştürüldü ve analiz edildi: $csvLine'),
@@ -565,19 +930,52 @@ class _ProductFixShellState extends State<ProductFixShell> {
     );
   }
 
-  Future<void> _openCsvDialog() async {
+  void _loadDemoProducts() {
+    setState(() {
+      rawProducts
+        ..clear()
+        ..addAll(parseCsvProducts(sampleCsvForTenant(tenant)));
+      selectedSection = AppSection.dashboard;
+      highlightedSku = null;
+    });
+    _saveStoredProducts();
+    _syncUrlWithSection();
+  }
+
+  Future<void> _openCsvDialog(BuildContext dialogContext) async {
     final rows = await showDialog<List<RawProduct>>(
-      context: context,
-      builder: (context) => const _CsvPasteDialog(),
+      context: dialogContext,
+      builder: (context) => _dialogScope(
+        const _CsvUploadDialog(),
+      ),
     );
 
     if (rows == null || rows.isEmpty) return;
 
     setState(() {
-      rawProducts.addAll(rows);
+      rawProducts
+        ..clear()
+        ..addAll(rows);
       selectedSection = AppSection.products;
       highlightedSku = rows.first.sku;
     });
+    _saveStoredProducts();
+    _syncUrlWithSection();
+  }
+
+  Widget _dialogScope(Widget child) {
+    return AppScope(
+      language: language,
+      darkMode: darkMode,
+      tenant: tenant,
+      onLanguageChanged: _setLanguage,
+      onDarkModeChanged: _setDarkMode,
+      onTenantChanged: _setTenant,
+      child: Theme(
+        data: _buildTheme(darkMode),
+        child: child,
+      ),
+    );
   }
 
   void _toggleFix(FixAction action) {
@@ -626,7 +1024,7 @@ class _ProductFixShellState extends State<ProductFixShell> {
   }
 
   void _loadCompletedFixesFromBrowser() {
-    final raw = html.window.localStorage[completedFixStorageKey];
+    final raw = html.window.localStorage[completedFixStorageKey(tenant.id)];
     if (raw == null || raw.isEmpty) return;
 
     try {
@@ -646,13 +1044,13 @@ class _ProductFixShellState extends State<ProductFixShell> {
         }
       });
     } catch (_) {
-      html.window.localStorage.remove(completedFixStorageKey);
+      html.window.localStorage.remove(completedFixStorageKey(tenant.id));
     }
   }
 
   Future<void> _loadCompletedFixesFromApi() async {
     try {
-      final fixes = await ProductFixApi.fetchCompletedFixes();
+      final fixes = await ProductFixApi.fetchCompletedFixes(tenant.id);
       if (!mounted) return;
       setState(() {
         for (final fix in fixes) {
@@ -677,7 +1075,11 @@ class _ProductFixShellState extends State<ProductFixShell> {
     required bool completed,
   }) async {
     try {
-      await ProductFixApi.setFixCompleted(action, completed: completed);
+      await ProductFixApi.setFixCompleted(
+        tenant.id,
+        action,
+        completed: completed,
+      );
       await _loadCompletedFixesFromApi();
     } catch (_) {
       if (!mounted) return;
@@ -695,7 +1097,8 @@ class _ProductFixShellState extends State<ProductFixShell> {
       'ids': completedFixIds.toList()..sort(),
       'keys': completedFixKeys.toList()..sort(),
     };
-    html.window.localStorage[completedFixStorageKey] = jsonEncode(payload);
+    html.window.localStorage[completedFixStorageKey(tenant.id)] =
+        jsonEncode(payload);
   }
 }
 
@@ -771,6 +1174,295 @@ class _SectionBody extends StatelessWidget {
     };
 
     return child;
+  }
+}
+
+class _DemoLoginView extends StatelessWidget {
+  const _DemoLoginView({
+    required this.selectedTenant,
+    required this.onTenantChanged,
+    required this.onLogin,
+  });
+
+  final DemoTenant selectedTenant;
+  final ValueChanged<DemoTenant> onTenantChanged;
+  final VoidCallback onLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: _Panel(
+            child: Padding(
+              padding: const EdgeInsets.all(26),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.green,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'PF',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          tr(context, 'auth.title'),
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    tr(context, 'auth.subtitle'),
+                    style: TextStyle(color: palette.muted, height: 1.5),
+                  ),
+                  const SizedBox(height: 22),
+                  Text(
+                    tr(context, 'tenant.label'),
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 10),
+                  for (final tenant in demoTenants)
+                    _TenantLoginOption(
+                      tenant: tenant,
+                      selected: tenant.id == selectedTenant.id,
+                      onTap: () => onTenantChanged(tenant),
+                    ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: onLogin,
+                      icon: const Icon(Icons.login),
+                      label: Text(tr(context, 'auth.button')),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TenantLoginOption extends StatelessWidget {
+  const _TenantLoginOption({
+    required this.tenant,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final DemoTenant tenant;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.greenSoft : palette.surfaceAlt,
+              border: Border.all(
+                color: selected ? AppColors.green : palette.line,
+                width: selected ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  color: selected ? AppColors.green : palette.muted,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tenant.label(context),
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${tenant.id} • ${tenant.hint(context)}',
+                        style: TextStyle(color: palette.muted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingView extends StatelessWidget {
+  const _OnboardingView({
+    super.key,
+    required this.onUseDemo,
+    required this.onPasteCsv,
+  });
+
+  final VoidCallback onUseDemo;
+  final VoidCallback onPasteCsv;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 980),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr(context, 'onboarding.title'),
+                style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                tr(context, 'onboarding.subtitle'),
+                style:
+                    TextStyle(color: palette.muted, fontSize: 17, height: 1.5),
+              ),
+              const SizedBox(height: 24),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 760;
+                  final cards = [
+                    _OnboardingChoice(
+                      icon: Icons.play_circle_outline,
+                      title: tr(context, 'onboarding.demoTitle'),
+                      text: tr(context, 'onboarding.demoText'),
+                      button: FilledButton.icon(
+                        onPressed: onUseDemo,
+                        icon: const Icon(Icons.auto_awesome_outlined),
+                        label: Text(tr(context, 'button.demo')),
+                      ),
+                    ),
+                    _OnboardingChoice(
+                      icon: Icons.table_chart_outlined,
+                      title: tr(context, 'onboarding.csvTitle'),
+                      text: tr(context, 'onboarding.csvText'),
+                      button: OutlinedButton.icon(
+                        onPressed: onPasteCsv,
+                        icon: const Icon(Icons.upload_file_outlined),
+                        label: Text(tr(context, 'button.csv')),
+                      ),
+                    ),
+                  ];
+
+                  if (narrow) {
+                    return Column(
+                      children: [
+                        cards[0],
+                        const SizedBox(height: 14),
+                        cards[1],
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: cards[0]),
+                      const SizedBox(width: 14),
+                      Expanded(child: cards[1]),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              const _CsvFormatGuide(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OnboardingChoice extends StatelessWidget {
+  const _OnboardingChoice({
+    required this.icon,
+    required this.title,
+    required this.text,
+    required this.button,
+  });
+
+  final IconData icon;
+  final String title;
+  final String text;
+  final Widget button;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return _Panel(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 30, color: AppColors.green),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Text(text, style: TextStyle(color: palette.muted, height: 1.45)),
+            const SizedBox(height: 18),
+            button,
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1191,10 +1883,15 @@ class _FixBoardColumn extends StatelessWidget {
 }
 
 class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.selectedSection, required this.onSelected});
+  const _Sidebar({
+    required this.selectedSection,
+    required this.onSelected,
+    required this.onLogout,
+  });
 
   final AppSection selectedSection;
   final ValueChanged<AppSection> onSelected;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -1244,6 +1941,40 @@ class _Sidebar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
+          Text(
+            tr(context, 'tenant.label'),
+            style: TextStyle(
+              color: palette.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<DemoTenant>(
+            initialValue: scope.tenant,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: [
+              for (final tenant in demoTenants)
+                DropdownMenuItem(
+                  value: tenant,
+                  child: Text(tenant.label(context)),
+                ),
+            ],
+            onChanged: (tenant) {
+              if (tenant != null) scope.onTenantChanged(tenant);
+            },
+          ),
+          const SizedBox(height: 6),
+          Text(
+            scope.tenant.id,
+            style: TextStyle(color: palette.muted, fontSize: 12),
+          ),
+          const SizedBox(height: 18),
           SegmentedButton<AppLanguage>(
             segments: const [
               ButtonSegment(value: AppLanguage.tr, label: Text('TR')),
@@ -1279,6 +2010,12 @@ class _Sidebar extends StatelessWidget {
                 onTap: () => onSelected(section),
               ),
             ),
+          const Spacer(),
+          OutlinedButton.icon(
+            onPressed: onLogout,
+            icon: const Icon(Icons.logout, size: 18),
+            label: Text(tr(context, 'auth.logout')),
+          ),
         ],
       ),
     );
@@ -1901,6 +2638,8 @@ class _ProductDetailDialog extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 18),
+              _RiskDiagnosisPanel(product: product),
+              const SizedBox(height: 18),
               Text(tr(context, 'product.beforeAfter'),
                   style: const TextStyle(fontWeight: FontWeight.w900)),
               const SizedBox(height: 10),
@@ -1950,6 +2689,139 @@ class _ProductDetailDialog extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
           child: Text(tr(context, 'button.close')),
         ),
+      ],
+    );
+  }
+}
+
+class _RiskDiagnosisPanel extends StatelessWidget {
+  const _RiskDiagnosisPanel({required this.product});
+
+  final ProductInsight product;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    final riskScore = 100 - product.score;
+    final problems = productMainProblems(context, product);
+    final fixes = productRecommendedFixes(context, product).take(4).toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: palette.aiSurface,
+        border: Border.all(color: AppColors.blueSoft),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.auto_awesome, color: AppColors.blue, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tr(context, 'product.riskDiagnosis'),
+                  style: const TextStyle(
+                    color: AppColors.blue,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _Pill(
+                '${tr(context, 'product.riskScore')}: $riskScore / 100',
+                color: riskColor(product.risk),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 700;
+              final problemList = _DiagnosisList(
+                title: tr(context, 'product.mainProblems'),
+                items: problems,
+                numbered: false,
+              );
+              final fixList = _DiagnosisList(
+                title: tr(context, 'product.recommendedFixes'),
+                items: fixes,
+                numbered: true,
+              );
+
+              if (narrow) {
+                return Column(
+                  children: [
+                    problemList,
+                    const SizedBox(height: 14),
+                    fixList,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: problemList),
+                  const SizedBox(width: 18),
+                  Expanded(child: fixList),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiagnosisList extends StatelessWidget {
+  const _DiagnosisList({
+    required this.title,
+    required this.items,
+    required this.numbered,
+  });
+
+  final String title;
+  final List<String> items;
+  final bool numbered;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        for (final entry in items.asMap().entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 7),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: numbered ? 24 : 18,
+                  child: Text(
+                    numbered ? '${entry.key + 1}.' : '-',
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    entry.value,
+                    style: TextStyle(color: palette.text, height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -2294,38 +3166,62 @@ class _ManualProductDialogState extends State<_ManualProductDialog> {
   }
 }
 
-class _CsvPasteDialog extends StatefulWidget {
-  const _CsvPasteDialog();
+class _CsvUploadDialog extends StatefulWidget {
+  const _CsvUploadDialog();
 
   @override
-  State<_CsvPasteDialog> createState() => _CsvPasteDialogState();
+  State<_CsvUploadDialog> createState() => _CsvUploadDialogState();
 }
 
-class _CsvPasteDialogState extends State<_CsvPasteDialog> {
-  final controller = TextEditingController(text: sampleCsv);
+class _CsvUploadDialogState extends State<_CsvUploadDialog> {
   String? error;
+  String? selectedFileName;
+  List<RawProduct>? parsedRows;
+  bool loading = false;
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(tr(context, 'button.csv')),
       content: SizedBox(
-        width: 820,
+        width: 680,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(tr(context, 'csv.help')),
             const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              minLines: 12,
-              maxLines: 16,
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                errorText: error,
+            const _CsvFormatGuide(compact: true),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: loading ? null : _pickAndParseFile,
+              icon: loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload_file_outlined),
+              label: Text(
+                selectedFileName == null
+                    ? tr(context, 'button.csv')
+                    : selectedFileName!,
               ),
             ),
+            if (parsedRows != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                '${parsedRows!.length} ürün hazır.',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ],
+            if (error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
           ],
         ),
       ),
@@ -2334,17 +3230,80 @@ class _CsvPasteDialogState extends State<_CsvPasteDialog> {
             onPressed: () => Navigator.pop(context),
             child: Text(tr(context, 'button.cancel'))),
         FilledButton(
-          onPressed: () {
-            final rows = parseCsvProducts(controller.text);
-            if (rows.isEmpty) {
-              setState(() => error = tr(context, 'csv.error'));
-              return;
-            }
-            Navigator.pop(context, rows);
-          },
+          onPressed: parsedRows == null
+              ? null
+              : () => Navigator.pop(context, parsedRows),
           child: Text(tr(context, 'button.analyze')),
         ),
       ],
+    );
+  }
+
+  Future<void> _pickAndParseFile() async {
+    final file = await pickProductFile();
+    if (file == null) return;
+
+    setState(() {
+      loading = true;
+      error = null;
+      selectedFileName = file.name;
+      parsedRows = null;
+    });
+
+    try {
+      final rows = await parseProductFile(file);
+      if (!mounted) return;
+      setState(() => parsedRows = rows);
+    } on CsvParseException catch (exception) {
+      if (!mounted) return;
+      setState(() => error = exception.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => error = tr(context, 'csv.error'));
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+}
+
+class _CsvFormatGuide extends StatelessWidget {
+  const _CsvFormatGuide({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppScope.of(context).colors;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.highlight,
+        border: Border.all(color: palette.line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(compact ? 12 : 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.info_outline, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  tr(context, 'csv.formatTitle'),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(tr(context, 'csv.formatHelp'),
+                style: TextStyle(color: palette.muted, height: 1.4)),
+            const SizedBox(height: 6),
+            Text(tr(context, 'csv.typeHelp'),
+                style: TextStyle(color: palette.muted, height: 1.4)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2843,6 +3802,27 @@ class RawProduct {
     required this.hasModelPhoto,
   });
 
+  factory RawProduct.fromJson(Map<String, dynamic> json) {
+    return RawProduct(
+      sku: '${json['sku'] ?? ''}',
+      name: '${json['name'] ?? ''}',
+      category: '${json['category'] ?? ''}',
+      views: intValue('${json['views'] ?? '0'}'),
+      addToCart: intValue('${json['addToCart'] ?? json['add_to_cart'] ?? '0'}'),
+      purchases: intValue('${json['purchases'] ?? '0'}'),
+      returns: intValue('${json['returns'] ?? '0'}'),
+      description: '${json['description'] ?? ''}',
+      reviews: '${json['reviews'] ?? ''}',
+      returnReasons: '${json['returnReasons'] ?? json['return_reasons'] ?? ''}',
+      photoCount:
+          intValue('${json['photoCount'] ?? json['photo_count'] ?? '0'}'),
+      hasSizeChart:
+          boolValue('${json['hasSizeChart'] ?? json['has_size_chart'] ?? ''}'),
+      hasModelPhoto: boolValue(
+          '${json['hasModelPhoto'] ?? json['has_model_photo'] ?? ''}'),
+    );
+  }
+
   final String sku;
   final String name;
   final String category;
@@ -2856,6 +3836,24 @@ class RawProduct {
   final int photoCount;
   final bool hasSizeChart;
   final bool hasModelPhoto;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'sku': sku,
+      'name': name,
+      'category': category,
+      'views': views,
+      'addToCart': addToCart,
+      'purchases': purchases,
+      'returns': returns,
+      'description': description,
+      'reviews': reviews,
+      'returnReasons': returnReasons,
+      'photoCount': photoCount,
+      'hasSizeChart': hasSizeChart,
+      'hasModelPhoto': hasModelPhoto,
+    };
+  }
 }
 
 class CompletedFix {
@@ -2886,9 +3884,9 @@ class CompletedFix {
 class ProductFixApi {
   const ProductFixApi._();
 
-  static Future<List<CompletedFix>> fetchCompletedFixes() async {
+  static Future<List<CompletedFix>> fetchCompletedFixes(String tenantId) async {
     final response = await html.HttpRequest.request(
-      '$apiBaseUrl/tenants/$appTenantId/fixes/completed',
+      '$apiBaseUrl/tenants/$tenantId/fixes/completed',
       method: 'GET',
       requestHeaders: {'Accept': 'application/json'},
     );
@@ -2901,11 +3899,12 @@ class ProductFixApi {
   }
 
   static Future<void> setFixCompleted(
+    String tenantId,
     FixAction action, {
     required bool completed,
   }) async {
     await html.HttpRequest.request(
-      '$apiBaseUrl/tenants/$appTenantId/fixes/${Uri.encodeComponent(action.id)}/complete',
+      '$apiBaseUrl/tenants/$tenantId/fixes/${Uri.encodeComponent(action.id)}/complete',
       method: 'POST',
       requestHeaders: {
         'Accept': 'application/json',
@@ -3152,10 +4151,96 @@ List<String> priorityImprovements(
 
 String suggestedDescription(
     RawProduct product, List<IssueRule> issues, List<String> missing) {
-  final issueText = issues.map((issue) => issue.label.toLowerCase()).join(', ');
-  final missingText =
-      missing.isEmpty ? '' : ' Eksik kalan alanlar: ${missing.join(', ')}.';
-  return '${product.description} ${product.name}, satın almadan önce doğru beklenti kurmak isteyen müşteriler için netleştirildi. Bu sayfada özellikle ${issueText.isEmpty ? 'ürün beklentisi' : issueText} konusu açıklığa kavuşturulmalı.$missingText Kullanım alanı, ölçü/teknik bilgi ve gerçek görünüm bilgisi ürün açıklamasında açıkça yer almalı.';
+  final english = _looksEnglish(product.description);
+  final category = normalizeFixTitle(product.category);
+
+  bool hasIssue(String key) => issues.any((issue) => issue.key == key);
+
+  bool hasMissing(String value) => missing.contains(value);
+
+  if (english) {
+    final details = <String>[];
+    if (category == 'giyim' || category == 'ayakkabi') {
+      details.add(hasIssue('size')
+          ? 'clear fit and sizing guidance'
+          : 'everyday comfort details');
+      details.add(hasIssue('quality')
+          ? 'material and texture information'
+          : 'fabric feel and care guidance');
+    } else if (category == 'elektronik') {
+      details.add('key technical specifications');
+      details.add('battery, connectivity, and box contents');
+    } else if (category == 'kozmetik') {
+      details.add('skin type guidance');
+      details.add('texture, scent, and ingredient expectations');
+    } else {
+      details.add('usage scenario');
+      details.add('material, size, and expectation details');
+    }
+    if (hasMissing('Kullanım/model fotoğrafı yok')) {
+      details.add('real-use photo guidance');
+    }
+    if (hasIssue('color')) details.add('realistic color expectations');
+    if (hasIssue('shipping')) details.add('delivery and packaging notes');
+    if (hasIssue('trust')) details.add('warranty and return policy notes');
+
+    return '${product.name} designed for a clearer shopping experience. Includes ${_joinEnglish(details)}, plus a short FAQ note that answers the most common customer concern before checkout.';
+  }
+
+  final details = <String>[];
+  if (category == 'giyim' || category == 'ayakkabi') {
+    details.add(hasIssue('size')
+        ? 'kalıp ve beden seçimi için net yönlendirme'
+        : 'günlük kullanım ve konfor bilgisi');
+    details.add(hasIssue('quality')
+        ? 'malzeme, doku ve bakım detayları'
+        : 'kumaş hissi ve kullanım önerisi');
+  } else if (category == 'elektronik') {
+    details.add('temel teknik özellikler');
+    details.add('pil, bağlantı ve kutu içeriği bilgisi');
+  } else if (category == 'kozmetik') {
+    details.add('cilt tipi yönlendirmesi');
+    details.add('doku, koku ve içerik beklentisi');
+  } else {
+    details.add('kullanım senaryosu');
+    details.add('malzeme, ölçü ve beklenti bilgisi');
+  }
+  if (hasMissing('Kullanım/model fotoğrafı yok')) {
+    details.add('gerçek kullanım veya model fotoğrafı yönlendirmesi');
+  }
+  if (hasIssue('color')) details.add('gerçekçi renk beklentisi');
+  if (hasIssue('shipping')) details.add('teslimat ve paketleme notu');
+  if (hasIssue('trust')) details.add('garanti ve iade koşulları');
+
+  return '${product.name}, müşterinin satın almadan önce doğru beklenti kurması için yeniden yazıldı. Açıklamada ${_joinTurkish(details)} yer alır; ayrıca en sık görülen müşteri itirazını cevaplayan kısa bir FAQ notu eklenir.';
+}
+
+bool _looksEnglish(String value) {
+  final text = value.trim().toLowerCase();
+  if (text.isEmpty) return false;
+  if (RegExp(r'[çğıöşü]').hasMatch(text)) return false;
+  return RegExp(r'\b(the|and|with|for|designed|comfortable|soft)\b')
+      .hasMatch(text);
+}
+
+String _joinEnglish(List<String> items) {
+  final unique = _uniqueStrings(items).take(5).toList();
+  if (unique.length <= 1) return unique.join();
+  return '${unique.take(unique.length - 1).join(', ')}, and ${unique.last}';
+}
+
+String _joinTurkish(List<String> items) {
+  final unique = _uniqueStrings(items).take(5).toList();
+  if (unique.length <= 1) return unique.join();
+  return '${unique.take(unique.length - 1).join(', ')} ve ${unique.last}';
+}
+
+List<String> _uniqueStrings(List<String> items) {
+  final seen = <String>{};
+  return [
+    for (final item in items)
+      if (seen.add(item)) item,
+  ];
 }
 
 String aiAssistantNote(
@@ -3183,6 +4268,76 @@ String buyerWarning(RawProduct product, List<IssueRule> issues) {
     _ =>
       'Mini uyarı: ${product.name} için müşteri beklentisini netleştiren kısa bir not göster.',
   };
+}
+
+List<String> productMainProblems(BuildContext context, ProductInsight product) {
+  final problems = <String>[];
+
+  void add(String item) {
+    if (!problems.contains(item)) problems.add(item);
+  }
+
+  if (product.returnRate > 0.12) add(tr(context, 'problem.highReturn'));
+  if (product.conversionRate < 0.08) {
+    add(tr(context, 'problem.lowAddToCart'));
+  }
+  if (product.cartConversionRate < 0.4) {
+    add(tr(context, 'problem.lowCartPurchase'));
+  }
+  if (product.missingInfo.contains('Beden tablosu yok')) {
+    add(tr(context, 'problem.missingSizeChart'));
+  }
+  if (product.missingInfo.contains('Açıklama kısa')) {
+    add(tr(context, 'problem.weakDescription'));
+  }
+  if (product.missingInfo.contains('Kullanım/model fotoğrafı yok')) {
+    add(tr(context, 'problem.missingModelPhoto'));
+  }
+  if (product.missingInfo.contains('Fotoğraf sayısı az')) {
+    add(tr(context, 'problem.lowPhotoCount'));
+  }
+
+  for (final issue in product.issues) {
+    add(switch (issue.key) {
+      'size' => tr(context, 'problem.sizeFeedback'),
+      'color' => tr(context, 'problem.expectationGap'),
+      _ => translateIssueLabel(context, issue),
+    });
+  }
+
+  return problems.isEmpty
+      ? [tr(context, 'fix.none')]
+      : problems.take(6).toList();
+}
+
+List<String> productRecommendedFixes(
+    BuildContext context, ProductInsight product) {
+  final fixes = <String>[];
+
+  void add(String item) {
+    if (!fixes.contains(item)) fixes.add(item);
+  }
+
+  if (product.missingInfo.contains('Beden tablosu yok')) {
+    add(tr(context, 'fix.addSizeChart'));
+  }
+  if (product.missingInfo.contains('Açıklama kısa') ||
+      product.issues
+          .any((issue) => issue.key == 'quality' || issue.key == 'size')) {
+    add(tr(context, 'fix.rewriteDescription'));
+  }
+  if (product.missingInfo.contains('Kullanım/model fotoğrafı yok')) {
+    add(tr(context, 'fix.addModelPhoto'));
+  }
+  if (product.issues.any((issue) => issue.key == 'size')) {
+    add(tr(context, 'fix.mentionSizingFaq'));
+  }
+
+  for (final action in product.fixActions) {
+    add(translateFixText(context, action.title));
+  }
+
+  return fixes.take(6).toList();
 }
 
 List<ThemeCount> themeCounts(List<ProductInsight> products) {
@@ -3345,13 +4500,149 @@ const _fixTextTranslations = {
       'No critical fix signal for this product; monitor it weekly.',
 };
 
+class CsvParseException implements Exception {
+  const CsvParseException(this.message);
+
+  final String message;
+}
+
+const csvRequiredHeaders = [
+  'sku',
+  'name',
+  'category',
+  'views',
+  'add_to_cart',
+  'purchases',
+  'returns',
+  'description',
+  'reviews',
+  'return_reasons',
+  'photo_count',
+  'has_size_chart',
+  'has_model_photo',
+];
+
+const csvNumericHeaders = [
+  'views',
+  'add_to_cart',
+  'purchases',
+  'returns',
+  'photo_count',
+];
+
+const csvBooleanHeaders = [
+  'has_size_chart',
+  'has_model_photo',
+];
+
+Future<html.File?> pickProductFile() async {
+  final input = html.FileUploadInputElement()
+    ..accept =
+        '.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  input.click();
+  await input.onChange.first;
+  final files = input.files;
+  return files == null || files.isEmpty ? null : files.first;
+}
+
+Future<List<RawProduct>> parseProductFile(html.File file) async {
+  final name = file.name.toLowerCase();
+  if (name.endsWith('.xlsx')) {
+    return parseExcelProducts(await readFileBytes(file));
+  }
+  if (name.endsWith('.csv')) {
+    return parseCsvProducts(await readFileText(file));
+  }
+  throw const CsvParseException('CSV veya XLSX dosyası yükle.');
+}
+
+Future<String> readFileText(html.File file) {
+  final completer = Completer<String>();
+  final reader = html.FileReader();
+  reader.onLoad.first.then((_) {
+    completer.complete('${reader.result ?? ''}');
+  });
+  reader.onError.first.then((_) {
+    completer.completeError(const CsvParseException('Dosya okunamadı.'));
+  });
+  reader.readAsText(file);
+  return completer.future;
+}
+
+Future<Uint8List> readFileBytes(html.File file) {
+  final completer = Completer<Uint8List>();
+  final reader = html.FileReader();
+  reader.onLoad.first.then((_) {
+    final result = reader.result;
+    if (result is ByteBuffer) {
+      completer.complete(result.asUint8List());
+    } else if (result is Uint8List) {
+      completer.complete(result);
+    } else {
+      completer.completeError(const CsvParseException('Dosya okunamadı.'));
+    }
+  });
+  reader.onError.first.then((_) {
+    completer.completeError(const CsvParseException('Dosya okunamadı.'));
+  });
+  reader.readAsArrayBuffer(file);
+  return completer.future;
+}
+
+List<RawProduct> parseExcelProducts(Uint8List bytes) {
+  final workbook = xls.Excel.decodeBytes(bytes);
+  for (final sheetName in workbook.tables.keys) {
+    final sheet = workbook.tables[sheetName];
+    if (sheet == null || sheet.rows.isEmpty) continue;
+    final rows = sheet.rows
+        .map((row) => row.map(excelCellText).toList(growable: false))
+        .toList(growable: false);
+    if (rows.any((row) => row.any((cell) => cell.trim().isNotEmpty))) {
+      return parseProductRows(rows);
+    }
+  }
+  throw const CsvParseException('Excel içinde en az bir ürün satırı olmalı.');
+}
+
+String excelCellText(dynamic cell) {
+  final value = cell?.value;
+  if (value == null) return '';
+  return switch (value) {
+    xls.TextCellValue() => '${value.value}',
+    xls.FormulaCellValue() => value.formula,
+    xls.IntCellValue() => '${value.value}',
+    xls.DoubleCellValue() => formatExcelNumber(value.value),
+    xls.DateCellValue() =>
+      value.asDateTimeLocal().toIso8601String().split('T').first,
+    xls.DateTimeCellValue() => value.asDateTimeLocal().toIso8601String(),
+    xls.TimeCellValue() => value.asDuration().toString(),
+    xls.BoolCellValue() => '${value.value}',
+    _ => '$value',
+  };
+}
+
+String formatExcelNumber(double value) {
+  return value == value.roundToDouble() ? '${value.round()}' : '$value';
+}
+
 List<RawProduct> parseCsvProducts(String csv) {
-  final rows = parseCsv(csv);
-  if (rows.length < 2) return [];
+  return parseProductRows(parseCsv(csv));
+}
+
+List<RawProduct> parseProductRows(List<List<String>> rows) {
+  if (rows.length < 2) {
+    throw const CsvParseException('CSV içinde en az bir ürün satırı olmalı.');
+  }
 
   final headers =
       rows.first.map((header) => header.trim().toLowerCase()).toList();
-  return rows
+  for (final header in csvRequiredHeaders) {
+    if (!headers.contains(header)) {
+      throw CsvParseException('$header kolonu eksik');
+    }
+  }
+
+  final products = rows
       .skip(1)
       .where((row) => row.any((cell) => cell.trim().isNotEmpty))
       .map((row) {
@@ -3360,10 +4651,27 @@ List<RawProduct> parseCsvProducts(String csv) {
       return index >= 0 && index < row.length ? row[index].trim() : '';
     }
 
+    final sku = value('sku');
+    if (sku.isEmpty) {
+      throw const CsvParseException('sku boş olamaz');
+    }
+
+    for (final header in csvNumericHeaders) {
+      final raw = value(header);
+      if (raw.isEmpty || int.tryParse(raw) == null) {
+        throw CsvParseException('$header sayısal olmalı');
+      }
+    }
+
+    for (final header in csvBooleanHeaders) {
+      final raw = value(header).toLowerCase();
+      if (raw != 'true' && raw != 'false') {
+        throw CsvParseException('$header true/false olmalı');
+      }
+    }
+
     return RawProduct(
-      sku: value('sku').isEmpty
-          ? 'SKU-${DateTime.now().millisecondsSinceEpoch}'
-          : value('sku'),
+      sku: sku,
       name: value('name').isEmpty ? 'Adsız ürün' : value('name'),
       category: value('category').isEmpty ? 'Genel' : value('category'),
       views: intValue(value('views')),
@@ -3378,6 +4686,12 @@ List<RawProduct> parseCsvProducts(String csv) {
       hasModelPhoto: boolValue(value('has_model_photo')),
     );
   }).toList();
+
+  if (products.isEmpty) {
+    throw const CsvParseException('CSV içinde en az bir ürün satırı olmalı.');
+  }
+
+  return products;
 }
 
 List<List<String>> parseCsv(String csv) {
@@ -3568,6 +4882,14 @@ const issueRules = [
   ),
 ];
 
+String sampleCsvForTenant(DemoTenant tenant) {
+  return switch (tenant.id) {
+    'fashion-store' => fashionStoreSampleCsv,
+    'electronics-store' => electronicsStoreSampleCsv,
+    _ => sampleCsv,
+  };
+}
+
 const sampleProducts = [
   RawProduct(
     sku: 'SNK-101',
@@ -3653,4 +4975,24 @@ const sampleProducts = [
 
 const sampleCsv =
     '''sku,name,category,views,add_to_cart,purchases,returns,description,reviews,return_reasons,photo_count,has_size_chart,has_model_photo
-TSH-555,Oversize Tişört,Giyim,1500,190,42,11,"Pamuk oversize tişört.","Kalıbı çok büyük. Kumaşı güzel ama boyu uzun.","Bedeni büyük geldi; boyu uzun",3,false,true''';
+SNK-101,Beyaz Platform Sneaker,Ayakkabi,4200,510,118,34,"Rahat ve şık günlük sneaker.","Ürün güzel ama kalıbı çok dar. Fotoğrafta daha yumuşak duruyor. Bir numara küçük geldi.","Numara küçük geldi; kalıbı dar; ayakta beklediğim gibi durmadı",4,true,false
+DRS-220,Siyah Kruvaze Elbise,Giyim,3100,430,86,29,"Kruvaze kesim siyah elbise. Günlük ve davet kullanımı için uygundur.","Kumaşı ince. Bedeni büyük geldi. Boyu modeldeki gibi durmadı.","Bedeni büyük geldi; kumaşı beklediğimden ince; boyu kısa",3,false,true
+HDP-044,Bluetooth Kulaklık,Elektronik,2800,260,74,8,"Bluetooth kulaklık, uzun pil ömrü.","Ses iyi ama bağlantı bazen kopuyor. Kutu içeriği açıklamada yoktu.","Bağlantı sorunu; açıklama eksik",5,false,false
+BAG-018,Mini Deri Çanta,Aksesuar,1900,250,112,6,"Şık mini çanta.","Rengi fotoğraftan koyu. Boyutu küçük ama kullanışlı.","Rengi farklı; boyut beklediğimden küçük",6,false,true
+COS-330,Nemlendirici Krem,Kozmetik,3600,390,141,17,"Tüm cilt tipleri için nemlendirici krem.","Kokusu yoğun. Hassas cildimde kızarıklık yaptı. İçerik bilgisi eksik.","Koku yoğun; ciltte kızarıklık; içerik bilgisi eksik",2,false,false''';
+
+const fashionStoreSampleCsv =
+    '''sku,name,category,views,add_to_cart,purchases,returns,description,reviews,return_reasons,photo_count,has_size_chart,has_model_photo
+FSH-101,Oversize Keten Gömlek,Giyim,5400,620,132,48,"Oversize keten gömlek. Günlük kullanım için hafif ve rahat.","Kumaşı fotoğraftakinden ince. Beden çok büyük geldi, omuzları düşük durdu.","Bedeni büyük geldi; kumaşı ince; model üzerindeki gibi durmadı",3,false,true
+FSH-214,Yüksek Bel Skinny Jean,Giyim,4600,520,118,39,"Yüksek bel esnek skinny jean.","Bel kısmı dar, paça boyu uzun. Rengi fotoğraftan daha açık geldi.","Beden dar geldi; boyu uzun; rengi farklı",4,false,false
+FSH-330,Koşu Sneakerı,Ayakkabi,3900,450,96,31,"Hafif koşu sneakerı, günlük antrenman için uygundur.","Kalıbı dar ve tabanı beklediğimden sert. Bir numara küçük geldi.","Numara küçük geldi; kalıbı dar; taban sert",5,true,false
+FSH-442,Saten Midi Elbise,Giyim,2800,360,74,28,"Saten midi elbise. Davet ve akşam kombinleri için uygundur.","Kumaşı ince gösteriyor, beden göğüs kısmında bol kaldı. Model fotoğrafı yanıltıcı.","Bedeni bol; kumaşı ince; modeldeki duruş farklı",2,false,true
+FSH-518,Fitilli Yoga Taytı,Giyim,3300,410,126,24,"Fitilli yoga taytı, esnek kumaş.","Diz yaptı, kumaş kalitesi beklediğim gibi değil. Beden rehberi yoktu.","Kalite algısı düşük; beden rehberi eksik; kumaş sert",3,false,false''';
+
+const electronicsStoreSampleCsv =
+    '''sku,name,category,views,add_to_cart,purchases,returns,description,reviews,return_reasons,photo_count,has_size_chart,has_model_photo
+ELC-044,Gürültü Engelleyici Kulaklık,Elektronik,5100,540,146,26,"Kablosuz kulaklık, aktif gürültü engelleme ve uzun pil ömrü.","Ses iyi ama bağlantı bazen kopuyor. Kutu içeriğinde kablo var mı belli değildi.","Bağlantı sorunu; kutu içeriği belirsiz; pil beklentisi net değil",5,false,false
+ELC-118,Akıllı Saat Pro,Elektronik,4700,500,121,33,"Akıllı saat, spor takibi ve bildirim özellikleri.","Şarjı vaat edilenden kısa gidiyor. Garanti ve orijinal ürün bilgisi görünür değildi.","Pil süresi kısa; garanti belirsiz; özellik açıklaması eksik",4,false,true
+ELC-207,Robot Süpürge Max,Elektronik,4300,470,104,29,"Robot süpürge, haritalama ve uygulama kontrolü.","Uygulama bağlantısı zor kuruldu. Yedek parça ve filtre ölçüsü açıklamada yoktu.","Bağlantı problemi; ölçü bilgisi eksik; kutu içeriği belirsiz",6,false,false
+ELC-315,27 İnç 4K Monitör,Elektronik,3600,390,88,19,"4K monitör, ince çerçeve ve yüksek çözünürlük.","Renkler fotoğraftaki gibi canlı değil. Kablo çıkıyor mu açıklamada yazmıyor.","Renk beklentisi farklı; kutu içeriği eksik; teknik özellik eksik",3,false,false
+ELC-426,20000 mAh Powerbank,Elektronik,3200,360,110,21,"Hızlı şarj destekli yüksek kapasiteli powerbank.","Şarj ederken ısınıyor. Kapasite ve watt bilgisi daha net olmalıydı.","Isınma; kapasite bilgisi eksik; teknik özellik belirsiz",4,false,true''';
